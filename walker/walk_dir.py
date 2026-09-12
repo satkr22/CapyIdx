@@ -381,10 +381,10 @@ async def get_ignore_context(
 
     # Note precedence here!
     ignore_context = Ignore()
-    ignore_context.add(ignore_arrays[0])          # gitignore
+    ignore_context.add(ignore_arrays[0])            # gitignore
     ignore_context.add(default_and_global_ignores)  # default file/folder ignores
                                                     # followed by global
                                                     # .continueignore - combined
                                                     # for speed
-    ignore_context.add(ignore_arrays[1])          # local .continueignore
+    ignore_context.add(ignore_arrays[1])            # local .continueignore
     return ignore_context
