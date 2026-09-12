@@ -1,6 +1,6 @@
 # utils/ignore.py
 import re
-from typing import Iterable, List, Union
+from typing import Iterable, List, Union, Optional
 
 import pathspec
 
@@ -57,7 +57,7 @@ class Ignore:
 
     def __init__(self) -> None:
         self.patterns: List[str] = []
-        self._spec = pathspec.PathSpec.from_lines("gitwildmatch", [])
+        self._spec: Optional[pathspec.PathSpec] = pathspec.PathSpec.from_lines("gitignore", [])
 
     def add(self, patterns: Union[str, Iterable[str], "Ignore"]) -> "Ignore":
         if isinstance(patterns, Ignore):
@@ -71,7 +71,7 @@ class Ignore:
 
     def ignores(self, path: str) -> bool:
         if self._spec is None:
-            self._spec = pathspec.PathSpec.from_lines("gitwildmatch", self.patterns)
+            self._spec = pathspec.PathSpec.from_lines("gitignore", self.patterns)
         return self._spec.match_file(path.lstrip("/"))
 
 

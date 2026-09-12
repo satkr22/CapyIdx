@@ -71,10 +71,10 @@ async def main():
     root = (await disk.get_workspace_dirs())[0]
 
     # Uncomment one test at a time
-    # await test_walk_dir(root, disk)
+    await test_walk_dir(root, disk)
     # await test_walk_dir_async(root, disk)
     # await test_dirs_only(root, disk)
-    await test_cache(root, disk)
+    # await test_cache(root, disk)
 
 asyncio.run(main())
 

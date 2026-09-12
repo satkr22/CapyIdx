@@ -1,45 +1,21 @@
-# walk_dir.py
 from __future__ import annotations
 
 import asyncio
 import time
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import (
     AsyncGenerator,
     List,
     Optional,
-    Protocol,
     Tuple,
-    Union,
 )
 
-import pathspec  # pip install pathspec
-
-# Sibling module imports (mirroring the TS file's imports)
 from utils.uri import join_paths_to_uri
 from utils.ignore import Ignore, default_ignore_file_and_dir, git_ig_array_from_file
-from utils.disk_operations import DiskOperations
-
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-
-class FileType(IntEnum):
-    # Matches VSCode's FileType enum values used by the TS code
-    FILE = 1
-    DIRECTORY = 2
-    SYMBOLIC_LINK = 64
+from utils.disk_operations import DiskOperations, FileType
 
 
 Entry = Tuple[str, FileType]
-
-
-# class IDE(Protocol):
-#     async def list_dir(self, uri: str) -> List[Entry]: ...
-#     async def read_file(self, uri: str) -> str: ...
-#     async def get_workspace_dirs(self) -> List[str]: ...
-
 
 # ---------------------------------------------------------------------------
 # Options
@@ -64,7 +40,6 @@ _DEFAULT_OPTIONS: dict = {
 
 
 def _resolve_options(overrides: Optional[WalkerOptions]) -> dict:
-    """Equivalent to `{ ...defaultOptions, ...overrides }` in TS."""
     opts = dict(_DEFAULT_OPTIONS)
     if overrides is not None:
         for key in _DEFAULT_OPTIONS:
@@ -161,18 +136,20 @@ class DFSWalker:
                 cached_listdir
                 and cached_listdir["time"] > _now_ms() - LIST_DIR_CACHE_TIME
             ):
-                print("CACHE HIT:", cur["walkable_entry"]["uri"])
+                # print("CACHE HIT:", cur["walkable_entry"]["uri"])
                 entries = await cached_listdir["entries"]
                 list_dir_cache_hits += 1
             else:
                 task = asyncio.create_task(
                     self.diskop.list_dir(cur["walkable_entry"]["uri"])
                 )
+                entries = await task # type: ignore
+                
                 walk_dir_cache.dir_list_cache[cur["walkable_entry"]["uri"]] = {
                     "time": _now_ms(),
                     "entries": task,
                 }
-                entries = await task # type: ignore
+                
             list_dir_time += _now_ms() - section
 
             section = _now_ms()
@@ -194,11 +171,12 @@ class DFSWalker:
                         default_and_global_ignores,
                     )
                 )
+                new_ignore = await ignore_task
+                
                 walk_dir_cache.dir_ignore_cache[cur["walkable_entry"]["uri"]] = {
                     "time": _now_ms(),
                     "ignore": ignore_task,
                 }
-                new_ignore = await ignore_task
 
             ignore_contexts = cur["ignore_contexts"] + [
                 {
@@ -304,12 +282,12 @@ class DFSWalker:
 # ---------------------------------------------------------------------------
 
 async def walk_dir_async(
-    path: str,
+    uri: str,
     diskop: DiskOperations,
     option_overrides: Optional[WalkerOptions] = None,
 ) -> AsyncGenerator[str, None]:
     options = _resolve_options(option_overrides)
-    async for p in DFSWalker(path, diskop, options).walk():
+    async for p in DFSWalker(uri, diskop, options).walk():
         yield p
 
 
@@ -361,22 +339,23 @@ async def get_ignore_context(
 
     async def get_git_ignore_patterns():
         if git_ignore_file:
-            contents = await diskop.read_file(f"{current_dir}/.gitignore")
+            # contents = await diskop.read_file(f"{current_dir}/.gitignore")
+            contents = await diskop.read_file(join_paths_to_uri(current_dir, ".gitignore"))
             return git_ig_array_from_file(contents)
         return []
 
-    async def get_continue_ignore_patterns():
-        if continue_ignore_file:
-            contents = await diskop.read_file(f"{current_dir}/.continueignore")
-            return git_ig_array_from_file(contents)
-        return []
+    # async def get_continue_ignore_patterns():
+    #     if continue_ignore_file:
+    #         contents = await diskop.read_file(f"{current_dir}/.continueignore")
+    #         return git_ig_array_from_file(contents)
+    #     return []
 
     ignore_arrays = await asyncio.gather(
         get_git_ignore_patterns(),
-        get_continue_ignore_patterns(),
+        # get_continue_ignore_patterns(),
     )
 
-    if len(ignore_arrays[0]) == 0 and len(ignore_arrays[1]) == 0:
+    if len(ignore_arrays[0]) == 0:
         return default_and_global_ignores
 
     # Note precedence here!
@@ -386,5 +365,5 @@ async def get_ignore_context(
                                                     # followed by global
                                                     # .continueignore - combined
                                                     # for speed
-    ignore_context.add(ignore_arrays[1])            # local .continueignore
+    # ignore_context.add(ignore_arrays[1])            # local .continueignore
     return ignore_context

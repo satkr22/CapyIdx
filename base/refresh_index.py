@@ -1,6 +1,6 @@
 """Refresh / catalog logic for the codebase indexer.
 
-Python port of Continue core/indexing/refreshIndex.ts.
+
 Same behaviour: tag_catalog + global_cache + four-list ops + IndexLock.
 """
 
