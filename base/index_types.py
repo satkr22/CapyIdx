@@ -12,7 +12,7 @@ from typing import (
     TypedDict,
 )
 
-from index_d import IndexTag, IndexingProgressUpdate
+from index_d import IndexTag, IndexingProgressUpdate, FileSystem
 
 
 
@@ -61,11 +61,17 @@ MarkCompleteCallback = Callable[
 RefreshIndex = Callable[[IndexTag], Awaitable[RefreshIndexResults]]
 
 
+@dataclass
+class IndexContext:
+    tag: IndexTag
+    filesystem: FileSystem
+    repo_name: Optional[str] = None
+
 # ---------------------------------------------------------------------------
 # One index backend (chunk / FTS / embeddings / snippets)
 # ---------------------------------------------------------------------------
 
-class CodebaseIndex(Protocol):
+class CodebaseIndexer(Protocol):
     artifact_id: str                 
     relative_expected_time: float    
 
