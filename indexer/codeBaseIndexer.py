@@ -48,6 +48,7 @@ from base.index_types import (
 )
 from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
+from watcher.file_watcher import FileWatcher, AutoFileWatcher
 
 # from dataclasses import dataclass
 
@@ -177,12 +178,14 @@ class CodeIndexer:
         self,
         fs: FileSystem,
         indexes: Optional[List[CodebaseIndexer]] = None,
+        watcher: FileWatcher | None = None,
         # index_types: Optional[Set[ContextIndexingType]] = None,
         files_per_batch: int = FILES_PER_BATCH,
         initial_paused: bool = False,
         disabled: bool = False,
     ) -> None:
         self.fs = fs
+        self.watcher = watcher or AutoFileWatcher()
         self.files_per_batch = files_per_batch
         self.disabled = disabled
 
@@ -226,6 +229,14 @@ class CodeIndexer:
     # ------------------------------------------------------------------
     # Index construction (getIndexesToBuild equivalent)
     # ------------------------------------------------------------------
+    async def start_watch(
+    self,
+    workspace_dirs: list[str],
+    ):
+        watcher = self.watcher.watch(workspace_dirs)
+        async for changed_files in watcher:
+            async for update in self.refresh_codebase_index_files(changed_files):
+                yield update
 
     async def get_indexes_to_build(self) -> List[CodebaseIndexer]:
         """
