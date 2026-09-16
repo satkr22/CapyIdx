@@ -119,7 +119,7 @@ class ChunkCodebaseIndex(CodebaseIndexer):
         # -------------------------------------------------------------- #
         # Remove tag
         # -------------------------------------------------------------- #
-
+        
         total = max(len(results.remove_tag), 1)
 
         for item in results.remove_tag:
