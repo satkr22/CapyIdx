@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Literal, Optional, Protocol, Tuple, List
+from typing import Any, Literal, Optional, Protocol, Tuple, List, Dict
 
 
 # --- chunks ---
@@ -72,8 +72,8 @@ class Position:
 
 @dataclass
 class Range:
-    start: Position
-    end: Position
+    start: RangePosition
+    end: RangePosition
 
 
 @dataclass
@@ -103,6 +103,21 @@ class FileStats:
     size: int
     last_modified: int
 
+
+@dataclass
+class RangePosition:
+    line: int
+    character: int
+
+@dataclass
+class SymbolWithRange:
+    filepath: str
+    type: str
+    name: str
+    range: Range
+    content: str
+    
+FileSymbolMap = Dict[str, List[SymbolWithRange]]
 
 FileStatsMap = dict[str, FileStats]
 

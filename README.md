@@ -1,1 +1,1 @@
-# CoreIndexer
+# CoreIndexer - Complete automated indexing solution for repositories/directories.
