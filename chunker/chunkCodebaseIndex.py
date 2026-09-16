@@ -26,18 +26,10 @@ from utils.uri import get_uri_path_basename
 
 class ChunkCodebaseIndex(CodebaseIndexer):
     """
-    Generic Python port of Continue's ChunkCodebaseIndex.
-
-    Infrastructure removed:
-        - ContinueServerClient
-        - Remote cache
-        - SqliteDb singleton
-
     Caller provides:
         - sqlite3.Connection
         - FileSystem
         - RefreshIndexResults
-        - mark_complete callback
     """
 
     artifact_id = "chunks"
