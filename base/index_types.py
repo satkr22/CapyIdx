@@ -63,7 +63,6 @@ RefreshIndex = Callable[[IndexTag], Awaitable[RefreshIndexResults]]
 
 @dataclass
 class IndexContext:
-    tag: IndexTag
     filesystem: FileSystem
     repo_name: Optional[str] = None
 
@@ -78,8 +77,9 @@ class CodebaseIndexer(Protocol):
     def update(
         self,
         tag: IndexTag,
+        context: IndexContext,
         results: RefreshIndexResults,
         mark_complete: MarkCompleteCallback,
-        repo_name: Optional[str],   
+        # repo_name: Optional[str],   
     ) -> AsyncIterator[IndexingProgressUpdate]:
         ...

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from index_types import (
-    CodebaseIndex,
+    CodebaseIndexer,
     IndexingProgressUpdate,
     IndexResultType,
     IndexTag,
@@ -285,7 +285,7 @@ async def get_compute_delete_add_remove(
     current_files: FileStatsMap,
     read_file: Callable[[str], Awaitable[str]],
     repo_name: Optional[str],
-) -> tuple[RefreshIndexResults, list[PathAndCacheKey], MarkCompleteCallback]:
+) -> tuple[RefreshIndexResults, list[PathAndCacheKey], MarkCompleteCallback, MarkCompleteCallback]:
     add, remove, last_updated, mark_complete = await get_add_remove_for_tag(
         tag, current_files, read_file
     )
@@ -339,7 +339,12 @@ async def get_compute_delete_add_remove(
         ):
             pass
 
-    return results, last_updated, mark_complete_with_global
+    return (
+        results,
+        last_updated,
+        mark_complete_with_global,
+        mark_complete,
+    )
 
 
 async def _noop_mark_complete(

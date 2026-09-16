@@ -24,16 +24,16 @@ import time
 from pathlib import Path
 from typing import (
     AsyncGenerator,
-    Callable,
+    # Callable,
     List,
     Optional,
     Sequence,
-    Set,
+    # Set,
 )
 from urllib.parse import unquote, urlparse
 
 from base.index_d import (
-    ContextIndexingType,
+    # ContextIndexingType,
     FileSystem,
     FileStatsMap,
     IndexingProgressUpdate,
@@ -44,9 +44,12 @@ from base.index_types import (
     IndexResultType,
     PathAndCacheKey,
     RefreshIndexResults,
+    IndexContext
 )
 from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
+
+# from dataclasses import dataclass
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +177,7 @@ class CodeIndexer:
         self,
         fs: FileSystem,
         indexes: Optional[List[CodebaseIndexer]] = None,
-        index_types: Optional[Set[ContextIndexingType]] = None,
+        # index_types: Optional[Set[ContextIndexingType]] = None,
         files_per_batch: int = FILES_PER_BATCH,
         initial_paused: bool = False,
         disabled: bool = False,
@@ -185,8 +188,10 @@ class CodeIndexer:
 
         self._pause = PauseToken(initial_paused)
         self._built_indexes: List[CodebaseIndexer] = list(indexes) if indexes else []
-        self._index_types: Set[ContextIndexingType] = set(index_types or [])
-        self._active_cancellation: Optional[CancellationToken] = None
+        # self._index_types: Set[ContextIndexingType] = set(index_types or [])
+        
+        self._directory_token: Optional[CancellationToken] = None
+        self._file_token: Optional[CancellationToken] = None
 
         self._state: IndexingProgressUpdate = IndexingProgressUpdate(
             progress=0.0,
@@ -212,8 +217,11 @@ class CodeIndexer:
 
     def cancel(self) -> None:
         """Cancel the in-flight full-directory refresh (if any)."""
-        if self._active_cancellation is not None:
-            self._active_cancellation.cancel()
+        if self._directory_token:
+            self._directory_token.cancel()
+
+        if self._file_token:
+            self._file_token.cancel()
 
     # ------------------------------------------------------------------
     # Index construction (getIndexesToBuild equivalent)
@@ -222,81 +230,79 @@ class CodeIndexer:
     async def get_indexes_to_build(self) -> List[CodebaseIndexer]:
         """
         Return the list of CodebaseIndexer backends to run.
-
-        If the caller supplied concrete ``indexes`` at construction time,
-        those are returned. Otherwise the requested ``index_types`` are
-        turned into backends via the (currently stubbed) factories.
         """
         if self._built_indexes:
             return list(self._built_indexes)
+        
+        return []
 
-        if not self._index_types:
-            return []
+        # if not self._index_types:
+        #     return []
 
-        factories: dict[ContextIndexingType, Callable[[], object]] = {
-            "chunk": self._make_chunk_index,
-            "code_snippets": self._make_snippets_index,
-            "full_text_search": self._make_fts_index,
-            "embeddings": self._make_embeddings_index,
-        }
+        # factories: dict[ContextIndexingType, Callable[[], object]] = {
+        #     "chunk": self._make_chunk_index,
+        #     "code_snippets": self._make_snippets_index,
+        #     "full_text_search": self._make_fts_index,
+        #     "embeddings": self._make_embeddings_index,
+        # }
 
-        indexes: List[CodebaseIndexer] = []
-        # Sequential – avoids concurrent SQLite setup races once backends exist.
-        for index_type in self._index_types:
-            factory = factories.get(index_type)
-            if factory is None:
-                continue
-            index = await factory()  # type: ignore[misc]
-            if index is not None:
-                indexes.append(index)
+        # indexes: List[CodebaseIndexer] = []
+        # # Sequential – avoids concurrent SQLite setup races once backends exist.
+        # for index_type in self._index_types:
+        #     factory = factories.get(index_type)
+        #     if factory is None:
+        #         continue
+        #     index = await factory()  # type: ignore[misc]
+        #     if index is not None:
+        #         indexes.append(index)
 
-        self._built_indexes = indexes
-        return list(indexes)
+        # self._built_indexes = indexes
+        # return list(indexes)
 
-    def set_indexes(self, indexes: List[CodebaseIndexer]) -> None:
-        """Replace the active index list (e.g. after backends are ready)."""
-        self._built_indexes = list(indexes)
+    # def set_indexes(self, indexes: List[CodebaseIndexer]) -> None:
+    #     """Replace the active index list (e.g. after backends are ready)."""
+    #     self._built_indexes = list(indexes)
 
-    def set_index_types(self, types: Set[ContextIndexingType]) -> None:
-        """
-        Change the requested types and clear the built cache so the next
-        get_indexes_to_build() rebuilds.
-        """
-        self._index_types = set(types)
-        self._built_indexes = []
-
-
+    # def set_index_types(self, types: Set[ContextIndexingType]) -> None:
+    #     """
+    #     Change the requested types and clear the built cache so the next
+    #     get_indexes_to_build() rebuilds.
+    #     """
+    #     self._index_types = set(types)
+    #     self._built_indexes = []
 
 
-    # --- factory stubs (fill in when porting each backend) ---------------
 
-    async def _make_chunk_index(self) -> Optional[CodebaseIndexer]:
-        """
-        TODO: port ChunkCodebaseIndexer from Continue.
-        Needs: read_file callable, max embedding chunk size (optional).
-        """
-        return None
 
-    async def _make_snippets_index(self) -> Optional[CodebaseIndexer]:
-        """
-        TODO: port CodeSnippetsCodebaseIndexer from Continue.
-        Needs: FileSystem (or IDE-like) for reading / AST if required.
-        """
-        return None
+    # # --- factory stubs (fill in when porting each backend) ---------------
 
-    async def _make_fts_index(self) -> Optional[CodebaseIndexer]:
-        """
-        TODO: port FullTextSearchCodebaseIndexer from Continue.
-        Pure SQLite FTS; no external model required.
-        """
-        return None
+    # async def _make_chunk_index(self) -> Optional[CodebaseIndexer]:
+    #     """
+    #     TODO: port ChunkCodebaseIndexer from Continue.
+    #     Needs: read_file callable, max embedding chunk size (optional).
+    #     """
+    #     return None
 
-    async def _make_embeddings_index(self) -> Optional[CodebaseIndexer]:
-        """
-        TODO: port LanceDbIndex (or equivalent vector index) from Continue.
-        Needs: embeddings provider + read_file callable.
-        """
-        return None
+    # async def _make_snippets_index(self) -> Optional[CodebaseIndexer]:
+    #     """
+    #     TODO: port CodeSnippetsCodebaseIndexer from Continue.
+    #     Needs: FileSystem (or IDE-like) for reading / AST if required.
+    #     """
+    #     return None
+
+    # async def _make_fts_index(self) -> Optional[CodebaseIndexer]:
+    #     """
+    #     TODO: port FullTextSearchCodebaseIndexer from Continue.
+    #     Pure SQLite FTS; no external model required.
+    #     """
+    #     return None
+
+    # async def _make_embeddings_index(self) -> Optional[CodebaseIndexer]:
+    #     """
+    #     TODO: port LanceDbIndex (or equivalent vector index) from Continue.
+    #     Needs: embeddings provider + read_file callable.
+    #     """
+    #     return None
 
     # ------------------------------------------------------------------
     # Friendly names for progress / warnings
@@ -329,25 +335,25 @@ class CodeIndexer:
         )
 
     async def _batch_refresh_index_results(
-        self, results: RefreshIndexResults
-    ) -> AsyncGenerator[RefreshIndexResults, None]:
-        """Yield successive batches of at most ``files_per_batch`` items."""
+    self,
+    results: RefreshIndexResults,
+    ):
         n = self.files_per_batch
         cur = 0
-        total = max(
-            len(results.compute),
-            len(results.delete),
-            len(results.add_tag),
-            len(results.remove_tag),
-            0,
-        )
-        while cur < total:
+
+        while (
+            cur < len(results.compute)
+            or cur < len(results.delete)
+            or cur < len(results.add_tag)
+            or cur < len(results.remove_tag)
+        ):
             yield RefreshIndexResults(
-                compute=results.compute[cur : cur + n],
-                delete=results.delete[cur : cur + n],
-                add_tag=results.add_tag[cur : cur + n],
-                remove_tag=results.remove_tag[cur : cur + n],
+                compute=results.compute[cur:cur+n],
+                delete=results.delete[cur:cur+n],
+                add_tag=results.add_tag[cur:cur+n],
+                remove_tag=results.remove_tag[cur:cur+n],
             )
+
             cur += n
 
     @staticmethod
@@ -450,8 +456,20 @@ class CodeIndexer:
         branch: str,
         repo_name: Optional[str],
     ) -> AsyncGenerator[IndexingProgressUpdate, None]:
-        stats: FileStatsMap = await self.fs.get_file_stats(files)
+        
         indexes = await self.get_indexes_to_build()
+        if not indexes:
+            weights = []
+            
+        weights = [
+            max(index.relative_expected_time, 1e-4)
+            for index in indexes
+        ]
+        total_weight = sum(weights)
+        completed_weight = 0.0
+        
+        stats: FileStatsMap = await self.fs.get_file_stats(files)
+        # indexes = await self.get_indexes_to_build()
         if not indexes:
             yield IndexingProgressUpdate(
                 progress=1.0,
@@ -460,11 +478,11 @@ class CodeIndexer:
             )
             return
 
-        completed_index_count = 0
+        # completed_index_count = 0
         progress = 0.0
         warnings: List[str] = []
 
-        for codebase_index in indexes:
+        for index_idx, codebase_index in enumerate(indexes):
             tag = IndexTag(
                 directory=directory,
                 branch=branch,
@@ -478,7 +496,7 @@ class CodeIndexer:
             )
 
             try:
-                results, last_updated, mark_complete = await get_compute_delete_add_remove(
+                results, last_updated, mark_complete, mark_last_updated = await get_compute_delete_add_remove(
                     tag,
                     dict(stats),
                     self.fs.read_file,
@@ -490,8 +508,12 @@ class CodeIndexer:
                 if total_ops > 0:
                     async for sub in self._batch_refresh_index_results(results):
                         try:
+                            context = IndexContext(
+                                filesystem=self.fs,
+                                repo_name=repo_name,
+                            )
                             async for update in codebase_index.update(
-                                tag, sub, mark_complete, repo_name
+                                tag, context, sub, mark_complete
                             ):
                                 yield IndexingProgressUpdate(
                                     progress=progress,
@@ -505,15 +527,25 @@ class CodeIndexer:
                                 + len(sub.add_tag)
                                 + len(sub.remove_tag)
                             )
+                            
+                            # progress = (
+                            #     (completed_index_count + completed_ops / total_ops)
+                            #     * (1.0 / len(indexes))
+                            # )
+                            
+                            current_weight = weights[index_idx]
+
                             progress = (
-                                (completed_index_count + completed_ops / total_ops)
-                                * (1.0 / len(indexes))
-                            )
+                                completed_weight +
+                                current_weight * (completed_ops / total_ops)
+                            ) / total_weight
+                            
                         except Exception as err:
                             # Non-fatal per-batch: record warning and continue.
                             friendly = self._friendly_index_name(
                                 codebase_index.artifact_id
                             )
+                            
                             msg = f"{friendly}: {err}"
                             warnings.append(msg)
                             completed_ops += (
@@ -522,22 +554,31 @@ class CodeIndexer:
                                 + len(sub.add_tag)
                                 + len(sub.remove_tag)
                             )
+                            
+                            current_weight = weights[index_idx]
+                            
                             progress = (
-                                (completed_index_count + completed_ops / total_ops)
-                                * (1.0 / len(indexes))
-                            )
+                                completed_weight +
+                                current_weight * (completed_ops / total_ops)
+                            ) / total_weight
 
-                await mark_complete(
-                    last_updated, IndexResultType.UPDATE_LAST_UPDATED
+                await mark_last_updated(
+                    last_updated,
+                    IndexResultType.UPDATE_LAST_UPDATED,
                 )
-                completed_index_count += 1
-                progress = completed_index_count * (1.0 / len(indexes))
+                # completed_index_count += 1
+                # progress = completed_index_count * (1.0 / len(indexes))
+                completed_weight += weights[index_idx]
+                progress = completed_weight / total_weight
 
             except Exception as err:
                 friendly = self._friendly_index_name(codebase_index.artifact_id)
                 warnings.append(f"{friendly}: {err}")
-                completed_index_count += 1
-                progress = completed_index_count * (1.0 / len(indexes))
+                # completed_index_count += 1
+                # progress = completed_index_count * (1.0 / len(indexes))
+                
+                completed_weight += weights[index_idx]
+                progress = completed_weight / total_weight
 
         if warnings:
             yield IndexingProgressUpdate(
@@ -564,7 +605,7 @@ class CodeIndexer:
         cancellation.
         """
         token = cancellation or CancellationToken()
-        self._active_cancellation = token
+        # self._active_cancellation = token
 
         progress = 0.0
 
@@ -683,9 +724,9 @@ class CodeIndexer:
             upd = self._handle_error(err)
             self._state = upd
             yield upd
-        finally:
-            if self._active_cancellation is token:
-                self._active_cancellation = None
+        # finally:
+        #     if self._active_cancellation is token:
+        #         self._active_cancellation = None
 
     # ------------------------------------------------------------------
     # Public: single-file / multi-file refresh
@@ -721,7 +762,7 @@ class CodeIndexer:
                 branch=branch,
                 artifact_id=index.artifact_id,
             )
-            full_results, full_last_updated, mark_complete = (
+            full_results, full_last_updated, mark_complete, mark_last_updated = (
                 await get_compute_delete_add_remove(
                     tag,
                     dict(stats),
@@ -734,10 +775,14 @@ class CodeIndexer:
             )
             if self._total_index_ops(results) + len(last_updated) == 0:
                 continue
-
-            async for _ in index.update(tag, results, mark_complete, repo_name):
+            
+            context = IndexContext(
+                filesystem=self.fs,
+                repo_name=repo_name,
+            )
+            async for _ in index.update(tag, context, results, mark_complete):
                 pass
-            await mark_complete(
+            await mark_last_updated(
                 last_updated, IndexResultType.UPDATE_LAST_UPDATED
             )
 
@@ -791,12 +836,12 @@ class CodeIndexer:
         the lock, runs refresh_dirs, then releases the lock.
         """
         # Cancel previous
-        if self._active_cancellation is not None:
-            self._active_cancellation.cancel()
+        if self._directory_token:
+            self._directory_token.cancel()
 
         token = CancellationToken()
-        self._active_cancellation = token
-
+        self._directory_token = token
+        
         async for update in self._wait_for_db_index():
             self._state = update
             yield update
@@ -819,8 +864,8 @@ class CodeIndexer:
             except asyncio.CancelledError:
                 pass
             IndexLock.unlock()
-            if self._active_cancellation is token:
-                self._active_cancellation = None
+            if self._directory_token is token:
+                self._directory_token = None
 
     async def _lock_heartbeat(self) -> None:
         """Refresh IndexLock timestamp every 5 s while we hold it."""
@@ -840,14 +885,17 @@ class CodeIndexer:
         owns the lock). Skips if a full directory refresh is already running.
         """
         if (
-            self._active_cancellation is not None
-            and not self._active_cancellation.cancelled
+            self._directory_token is not None
+            and not self._directory_token.cancelled
         ):
-            # A directory refresh is in progress – skip file refresh.
             return
 
+        if self._file_token:
+            self._file_token.cancel()
+
         token = CancellationToken()
-        self._active_cancellation = token
+        self._file_token = token
+        
         try:
             async for update in self.refresh_files(files):
                 self._state = update
@@ -857,5 +905,5 @@ class CodeIndexer:
             self._state = upd
             yield upd
         finally:
-            if self._active_cancellation is token:
-                self._active_cancellation = None
+            if self._file_token is token:
+                self._file_token = None
