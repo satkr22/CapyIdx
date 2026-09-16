@@ -7,10 +7,47 @@ autodetectTemplateType, IS_BINARY branch, llamaTokenizer fallback).
 Core token counting and message compilation logic are preserved.
 """
 
+import math
 import json
+import asyncio
 import tiktoken
 from typing import Any, Dict, List, Optional, Union
 
+
+# Importing a bunch of tokenizers can be very resource intensive (MB-scale per tokenizer)
+# Using token counting APIs (e.g. for anthropic) can be complicated and unreliable in many environments
+# So for now we will just use super fast gpt-tokenizer and apply safety buffers
+# I'm using rough estimates from this article to apply safety buffers to common tokenizers
+# which will have HIGHER token counts than gpt. Roughly using token ratio from article + 10%
+# https://medium.com/@disparate-ai/not-all-tokens-are-created-equal-7347d549af4d
+
+ANTHROPIC_TOKEN_MULTIPLIER = 1.23
+GEMINI_TOKEN_MULTIPLIER = 1.18
+MISTRAL_TOKEN_MULTIPLIER = 1.26
+
+
+def _get_adjusted_token_count_from_model(base_tokens: int, model_name: str) -> int:
+    """
+    Adjusts token count based on model-specific tokenizer differences.
+    Since we use llama tokenizer (~= gpt tokenizer) for all models, we apply
+    multipliers for models known to have higher token counts.
+
+    :param base_tokens: Token count from llama/gpt tokenizer
+    :param model_name: Name of the model
+    :returns: Adjusted token count with safety buffer
+    """
+    multiplier = 1.0
+    lower_model_name = (model_name or "").lower()
+
+    if "claude" in lower_model_name:
+        multiplier = ANTHROPIC_TOKEN_MULTIPLIER
+    elif "gemini" in lower_model_name:
+        multiplier = GEMINI_TOKEN_MULTIPLIER
+    elif "stral" in lower_model_name or "mixtral" in lower_model_name:
+        # Mistral family models: mistral, mixtral, codestral, devstral, etc
+        multiplier = MISTRAL_TOKEN_MULTIPLIER
+
+    return math.ceil(base_tokens * multiplier)
 
 # ---------------------------------------------------------------------------
 # Types
@@ -43,11 +80,6 @@ def _encoding_for_model(model_name: str):
     return _gpt_encoding
 
 
-def _get_adjusted_token_count_from_model(base_tokens: int, model_name: str) -> int:
-    # Stub matching the original import.
-    return base_tokens
-
-
 def _count_image_tokens(content: Dict[str, Any]) -> int:
     if content.get("type") == "imageUrl":
         return 1024
@@ -71,27 +103,44 @@ def count_tokens(content: MessageContent, model_name: str = "llama2") -> int:
                     )
                 )
             else:
-                base_tokens += _count_image_tokens(part)
-    else:
+                try:
+                    base_tokens += _count_image_tokens(part)
+                except (KeyError, TypeError):
+                    # Unknown part type — skip rather than crash.
+                    pass
+    else:   
         base_tokens = len(encoding.encode(content or "", disallowed_special=()))
 
     return _get_adjusted_token_count_from_model(base_tokens, model_name)
 
 
 async def count_tokens_async(content: MessageContent, model_name: str = "llama2") -> int:
-    # Original used a worker pool for parallelism. In Python we just
-    # delegate to the encoding directly.
-    encoding = _encoding_for_model(model_name)
+    
+    # Delegate to the sync implementation on a worker thread so the event
+    # loop is not blocked by tiktoken's CPU-bound encode. This guarantees
+    # parity with count_tokens() — including the model-specific multiplier
+    # applied by _get_adjusted_token_count_from_model.
+    return await asyncio.to_thread(count_tokens, content, model_name)
+    
+    
+    
+    
+    
+    
+# async def count_tokens_async(content: MessageContent, model_name: str = "llama2") -> int:
+#     # Original used a worker pool for parallelism. In Python we just
+#     # delegate to the encoding directly.
+#     encoding = _encoding_for_model(model_name)
 
-    if isinstance(content, list):
-        total = 0
-        for part in content:
-            if part.get("type") == "imageUrl":
-                total += _count_image_tokens(part)
-            else:
-                total += len(encoding.encode(part.get("text") or "", disallowed_special=()))
-        return total
-    return len(encoding.encode(content or "", disallowed_special=()))
+#     if isinstance(content, list):
+#         total = 0
+#         for part in content:
+#             if part.get("type") == "imageUrl":
+#                 total += _count_image_tokens(part)
+#             else:
+#                 total += len(encoding.encode(part.get("text") or "", disallowed_special=()))
+#         return total
+#     return len(encoding.encode(content or "", disallowed_special=()))
 
 
 # https://community.openai.com/t/how-to-calculate-the-tokens-when-using-function-call/266573/10
