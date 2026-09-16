@@ -57,7 +57,7 @@ class DiskOperations(FileSystem):
         return await asyncio.to_thread(self._list_dir_sync, _uri_to_path(uri))
 
     async def read_file(self, uri: str) -> str:
-        return await asyncio.to_thread(self._read_file_sync, _uri_to_path(uri))
+        return await asyncio.to_thread(self._read_file_sync, _uri_to_path(uri) if uri.startswith("file://") else uri)
     
     async def file_exists(self, uri: str) -> bool:
         return await asyncio.to_thread(os.path.exists, _uri_to_path(uri))
@@ -67,6 +67,8 @@ class DiskOperations(FileSystem):
 
         Keys match the input paths (after normalization onlyfor lookup).
         """
+        # print("here5--disk_op")
+        # print(uris)
         return await asyncio.to_thread(self._get_file_stats_sync, [_uri_to_path(uri) for uri in uris])
     
     async def get_branch(self, directory_uri: str) -> str:
@@ -114,8 +116,12 @@ class DiskOperations(FileSystem):
             FileStats = None  # type: ignore
 
         result = {}
+        # print("paths---", paths)
         for raw in paths:
-            p = _uri_to_path(raw)
+            # print("here6----", raw)
+            # p = _uri_to_path(raw)
+            # print("here7----", p)
+            p = raw
             try:
                 st = os.stat(p, follow_symlinks=False)
                 size = st.st_size

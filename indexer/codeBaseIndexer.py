@@ -49,6 +49,7 @@ from base.index_types import (
 from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
 from watcher.file_watcher import FileWatcher, AutoFileWatcher
+from utils.uri import get_uri_path_basename
 
 # from dataclasses import dataclass
 
@@ -119,9 +120,11 @@ def _uri_path_basename(uri: str) -> str:
     """Basename of a file:// URI or plain path."""
     if uri.startswith("file://"):
         parsed = urlparse(uri)
+        print(parsed)
         path = unquote(parsed.path)
     else:
         path = uri
+        print(path)
     return Path(path.rstrip("/")).name or path
 
 
@@ -468,7 +471,10 @@ class CodeIndexer:
         repo_name: Optional[str],
     ) -> AsyncGenerator[IndexingProgressUpdate, None]:
         
+        # print("here3")
         indexes = await self.get_indexes_to_build()
+        # print("here4")
+        # print(indexes)
         if not indexes:
             weights = []
             
@@ -480,6 +486,8 @@ class CodeIndexer:
         completed_weight = 0.0
         
         stats: FileStatsMap = await self.fs.get_file_stats(files)
+        # print(stats.keys())
+        # print("okay---- indexer -line 490")
         # indexes = await self.get_indexes_to_build()
         if not indexes:
             yield IndexingProgressUpdate(
@@ -507,12 +515,14 @@ class CodeIndexer:
             )
 
             try:
+                # print("reading")
                 results, last_updated, mark_complete, mark_last_updated = await get_compute_delete_add_remove(
                     tag,
                     dict(stats),
                     self.fs.read_file,
                     repo_name,
                 )
+                # print("here5")
                 total_ops = self._total_index_ops(results)
                 completed_ops = 0
 
@@ -636,9 +646,9 @@ class CodeIndexer:
             yield upd
             return
 
-        yield IndexingProgressUpdate(
-            progress=progress, desc="Starting indexing", status="loading"
-        )
+        # yield IndexingProgressUpdate(
+        #     progress=progress, desc="Starting indexing", status="loading"
+        # )
 
         # Touch git early so we don't sit at 0 % waiting for it later.
         try:
@@ -653,10 +663,12 @@ class CodeIndexer:
         collected_warnings: List[str] = []
 
         try:
+            # print(type(dirs))
             for directory in dirs:
                 token.throw_if_cancelled()
-
-                dir_basename = _uri_path_basename(directory)
+                # print(directory)
+                dir_basename = get_uri_path_basename(directory)
+                # print("----", dir_basename)
                 yield IndexingProgressUpdate(
                     progress=progress,
                     desc=f"Discovering files in {dir_basename}...",
@@ -664,6 +676,7 @@ class CodeIndexer:
                 )
 
                 directory_files: List[str] = []
+                # print("here3")
                 # walk_dir currently typed against DiskOperations; FileSystem
                 # implementations that match the protocol work at runtime.
                 async for p in walk_dir_async(
@@ -671,7 +684,9 @@ class CodeIndexer:
                     self.fs,  # type: ignore[arg-type]
                     WalkerOptions(source="codebase indexing: refresh dirs"),
                 ):
+                    # print("here4")
                     directory_files.append(p)
+                    # print(p)
                     if token.cancelled:
                         upd = IndexingProgressUpdate(
                             progress=0.0,
@@ -688,7 +703,7 @@ class CodeIndexer:
 
                 branch = await self.fs.get_branch(directory)
                 repo_name = await self.fs.get_repo_name(directory)
-
+                # print("--------", repo_name)
                 async for update in self._index_files(
                     directory, directory_files, branch, repo_name
                 ):
@@ -861,6 +876,7 @@ class CodeIndexer:
         timestamp_task = asyncio.create_task(self._lock_heartbeat())
 
         try:
+            # print(paths)
             async for update in self.refresh_dirs(paths, cancellation=token):
                 self._state = update
                 yield update

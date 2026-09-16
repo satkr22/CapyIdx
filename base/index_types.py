@@ -12,7 +12,7 @@ from typing import (
     TypedDict,
 )
 
-from index_d import IndexTag, IndexingProgressUpdate, FileSystem
+from base.index_d import IndexTag, IndexingProgressUpdate, FileSystem
 
 
 

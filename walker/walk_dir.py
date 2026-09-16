@@ -90,6 +90,8 @@ class DFSWalker:
 
     # walk is a depth-first search implementation
     async def walk(self) -> AsyncGenerator[str, None]:
+        
+        # print("here2")
         start = _now_ms()
         ignore_file_time = 0
         ignore_time = 0
@@ -119,6 +121,7 @@ class DFSWalker:
             "ignore_contexts": [],
         }
         stack = [root_context]
+        # print("walk stack:", stack)
 
         while stack:
             cur = stack.pop()
@@ -287,7 +290,9 @@ async def walk_dir_async(
     option_overrides: Optional[WalkerOptions] = None,
 ) -> AsyncGenerator[str, None]:
     options = _resolve_options(option_overrides)
+    # print("here1")
     async for p in DFSWalker(uri, diskop, options).walk():
+        # print("here3")
         yield p
 
 

@@ -14,7 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
-from index_types import (
+from base.index_types import (
     CodebaseIndexer,
     IndexingProgressUpdate,
     IndexResultType,
@@ -23,14 +23,14 @@ from index_types import (
     PathAndCacheKey,
     RefreshIndexResults,
 )
-from index_d import FileStatsMap
+from base.index_d import FileStatsMap
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 SQLITE_MAX_LIKE_PATTERN_LENGTH = 50_000
 _READ_CONCURRENCY = 10
 
 
-from db import SqliteDB
+from base.db import SqliteDB
 
 # ---------------------------------------------------------------------------
 # Helpers
