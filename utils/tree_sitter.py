@@ -1,9 +1,5 @@
 """
-Python conversion of treeSitter.ts
-
-Preserves the exact behaviour of the original TypeScript module.
-Uses `tree_sitter` + `tree_sitter_language_pack` as the runtime equivalents
-of `web-tree-sitter` + prebuilt `.wasm` grammar files.
+Uses `tree_sitter` + `tree_sitter_language_pack`.
 """
 
 from __future__ import annotations

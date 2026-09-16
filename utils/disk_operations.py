@@ -9,26 +9,11 @@ from typing import List, Tuple, Optional
 from base.index_d import FileSystem, FileType
 from urllib.parse import quote, unquote, urlparse
 
+from utils.uri import get_uri_to_path, get_path_to_uri
 
 Entry = Tuple[str, FileType]
 
 _WINDOWS = os.name == "nt"
-
-def _path_to_uri(path: str) -> str:
-    p = os.path.abspath(path).replace(os.sep, "/")
-    if _WINDOWS and not p.startswith("/"):
-        p = "/" + p
-    return "file://" + quote(p, safe="/:")
-
-
-def _uri_to_path(uri: str) -> str:
-    parsed = urlparse(uri)
-    if parsed.scheme != "file":
-        raise ValueError(f"not a file:// uri: {uri!r}")
-    p = unquote(parsed.path)
-    if _WINDOWS and len(p) >= 3 and p[0] == "/" and p[2] == ":":
-        p = p[1:]
-    return p
 
 
 def _classify(entry: os.DirEntry) -> int:
@@ -47,20 +32,20 @@ class DiskOperations(FileSystem):
     """Filesystem backend for the walker. async methods."""
 
     def __init__(self, roots: List[str], encoding: str = "utf-8") -> None:
-        self._roots: List[str] = [_path_to_uri(r) if not r.startswith("file://") else r for r in roots]
+        self._roots: List[str] = [get_path_to_uri(r) if not r.startswith("file://") else r for r in roots]
         self._encoding = encoding
 
     async def get_workspace_dirs(self) -> List[str]:
         return list(self._roots)
 
     async def list_dir(self, uri: str) -> List[Entry]:
-        return await asyncio.to_thread(self._list_dir_sync, _uri_to_path(uri))
+        return await asyncio.to_thread(self._list_dir_sync, get_uri_to_path(uri))
 
     async def read_file(self, uri: str) -> str:
-        return await asyncio.to_thread(self._read_file_sync, _uri_to_path(uri) if uri.startswith("file://") else uri)
+        return await asyncio.to_thread(self._read_file_sync, get_uri_to_path(uri) if uri.startswith("file://") else uri)
     
     async def file_exists(self, uri: str) -> bool:
-        return await asyncio.to_thread(os.path.exists, _uri_to_path(uri))
+        return await asyncio.to_thread(os.path.exists, get_uri_to_path(uri))
     
     async def get_file_stats(self, uris: List[str]) -> dict:
         """Return {path: FileStats-like dict with size + last_modified ms}.
@@ -69,14 +54,14 @@ class DiskOperations(FileSystem):
         """
         # print("here5--disk_op")
         # print(uris)
-        return await asyncio.to_thread(self._get_file_stats_sync, [_uri_to_path(uri) for uri in uris])
+        return await asyncio.to_thread(self._get_file_stats_sync, [get_uri_to_path(uri) for uri in uris])
     
     async def get_branch(self, directory_uri: str) -> str:
-        return await asyncio.to_thread(self._get_branch_sync, _uri_to_path(directory_uri))
+        return await asyncio.to_thread(self._get_branch_sync, get_uri_to_path(directory_uri))
 
     async def get_repo_name(self, directory_uri: str) -> Optional[str]:
         return await asyncio.to_thread(
-            self._get_repo_name_sync, _uri_to_path(directory_uri)
+            self._get_repo_name_sync, get_uri_to_path(directory_uri)
         )
     
 
@@ -119,7 +104,7 @@ class DiskOperations(FileSystem):
         # print("paths---", paths)
         for raw in paths:
             # print("here6----", raw)
-            # p = _uri_to_path(raw)
+            # p = get_uri_to_path(raw)
             # print("here7----", p)
             p = raw
             try:

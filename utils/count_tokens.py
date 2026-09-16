@@ -65,11 +65,15 @@ def count_tokens(content: MessageContent, model_name: str = "llama2") -> int:
         base_tokens = 0
         for part in content:
             if part.get("type") == "text":
-                base_tokens += len(encoding.encode(part.get("text") or ""))
+                base_tokens += len(encoding.encode(
+                        part.get("text") or "",
+                        disallowed_special=(),
+                    )
+                )
             else:
                 base_tokens += _count_image_tokens(part)
     else:
-        base_tokens = len(encoding.encode(content or ""))
+        base_tokens = len(encoding.encode(content or "", disallowed_special=()))
 
     return _get_adjusted_token_count_from_model(base_tokens, model_name)
 
@@ -85,9 +89,9 @@ async def count_tokens_async(content: MessageContent, model_name: str = "llama2"
             if part.get("type") == "imageUrl":
                 total += _count_image_tokens(part)
             else:
-                total += len(encoding.encode(part.get("text") or ""))
+                total += len(encoding.encode(part.get("text") or "", disallowed_special=()))
         return total
-    return len(encoding.encode(content or ""))
+    return len(encoding.encode(content or "", disallowed_special=()))
 
 
 # https://community.openai.com/t/how-to-calculate-the-tokens-when-using-function-call/266573/10
@@ -95,7 +99,7 @@ def count_tools_tokens(tools: List[Dict[str, Any]], model_name: str) -> int:
     encoding = _encoding_for_model(model_name)
 
     def _count(value: str) -> int:
-        return len(encoding.encode(value))
+        return len(encoding.encode(value, disallowed_special=()))
 
     num_tokens = 12
 
@@ -313,7 +317,7 @@ def prune_lines_from_bottom(prompt: str, max_tokens: int, model_name: str) -> st
 
 def prune_string_from_bottom(model_name: str, max_tokens: int, prompt: str) -> str:
     encoding = _encoding_for_model(model_name)
-    tokens = encoding.encode(prompt)
+    tokens = encoding.encode(prompt, disallowed_special=())
     if len(tokens) <= max_tokens:
         return prompt
     return encoding.decode(tokens[:max_tokens])
@@ -321,7 +325,7 @@ def prune_string_from_bottom(model_name: str, max_tokens: int, prompt: str) -> s
 
 def prune_string_from_top(model_name: str, max_tokens: int, prompt: str) -> str:
     encoding = _encoding_for_model(model_name)
-    tokens = encoding.encode(prompt)
+    tokens = encoding.encode(prompt, disallowed_special=())
     if len(tokens) <= max_tokens:
         return prompt
     return encoding.decode(tokens[len(tokens) - max_tokens:])

@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from utils.paths import get_coreIndexer_global_path
 
 class SqliteDB:
     _db: Optional[sqlite3.Connection] = None
@@ -11,7 +12,8 @@ class SqliteDB:
 
     @staticmethod
     def default_path() -> Path:
-        return Path.home() / ".codebase_index" / "index.sqlite"
+        
+        return get_coreIndexer_global_path() / ".codebase_index" / "index.sqlite"
 
     @classmethod
     def initialize(cls, db_path: Optional[Path] = None) -> None:
@@ -103,3 +105,6 @@ class SqliteDB:
             cls._db.close()
             cls._db = None
             cls._db_path = None
+            
+            
+hi = "hii"
