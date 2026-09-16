@@ -50,6 +50,7 @@ class ChunkCodebaseIndex(CodebaseIndexer):
         max_chunk_size: int = 1024,
     ):
         self.db = db
+        self.db.row_factory = sqlite3.Row 
         self.fs = filesystem
         self.max_chunk_size = max_chunk_size
         self.create_tables()

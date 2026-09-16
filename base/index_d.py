@@ -61,6 +61,22 @@ ContextIndexingType = Literal[
     "code_snippets",
 ]
 
+# -- fts --
+
+@dataclass(frozen=True)
+class BranchAndDir:
+    directory: str
+    branch: str
+
+
+@dataclass
+class RetrieveConfig:
+    tags: list[BranchAndDir]
+    text: str
+    n: int
+    directory: Optional[str] = None
+    filter_paths: Optional[list[str]] = None
+    bm25_threshold: Optional[float] = None
 
 # --- positions (snippets / ranges) ---
 
