@@ -78,25 +78,65 @@ def _map_result_type(result_type: IndexResultType) -> AddRemoveResultType:
 # tag_catalog reads / add-remove planning
 # ---------------------------------------------------------------------------
 
+# def get_saved_items_for_tag(
+#     tag: IndexTag,
+# ) -> list[tuple[str, str, int]]:
+#     """Return (path, cache_key, last_updated) rows for a tag."""
+#     db = SqliteDB.get()
+#     rows = db.execute(
+#         """
+#         SELECT path, cacheKey, lastUpdated FROM tag_catalog
+#         WHERE dir = ? AND branch = ? AND artifactId = ?
+#         """,
+#         (tag.directory, tag.branch, tag.artifact_id),
+#     ).fetchall()
+#     return [(r["path"], r["cacheKey"], r["lastUpdated"]) for r in rows]
+
+
 def get_saved_items_for_tag(
     tag: IndexTag,
+    only_paths: Optional[set[str]] = None,
 ) -> list[tuple[str, str, int]]:
-    """Return (path, cache_key, last_updated) rows for a tag."""
+    """Return (path, cache_key, last_updated) rows for a tag.
+    
+    When only_paths is given, only those paths are returned (O(1) for
+    single-file refresh). Otherwise returns the full catalog for the tag.
+    """
     db = SqliteDB.get()
-    rows = db.execute(
-        """
-        SELECT path, cacheKey, lastUpdated FROM tag_catalog
-        WHERE dir = ? AND branch = ? AND artifactId = ?
-        """,
-        (tag.directory, tag.branch, tag.artifact_id),
-    ).fetchall()
+    if only_paths is not None:
+        # SQLite has a practical limit on the number of variables (~999 by
+        # default). Single-file refresh always has |only_paths| == 1, so
+        # this is fine. If you ever pass thousands of paths, batch them.
+        paths = list(only_paths)
+        if not paths:
+            return []
+        placeholders = ",".join("?" for _ in paths)
+        rows = db.execute(
+            f"""
+            SELECT path, cacheKey, lastUpdated FROM tag_catalog
+            WHERE dir = ? AND branch = ? AND artifactId = ?
+              AND path IN ({placeholders})
+            """,
+            (tag.directory, tag.branch, tag.artifact_id, *paths),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT path, cacheKey, lastUpdated FROM tag_catalog
+            WHERE dir = ? AND branch = ? AND artifactId = ?
+            """,
+            (tag.directory, tag.branch, tag.artifact_id),
+        ).fetchall()
     return [(r["path"], r["cacheKey"], r["lastUpdated"]) for r in rows]
+
 
 
 async def get_add_remove_for_tag(
     tag: IndexTag,
     current_files: FileStatsMap,
     read_file: Callable[[str], Awaitable[str]],
+    *,
+    only_paths: Optional[set[str]] = None,
 ) -> tuple[
     list[PathAndCacheKey],
     list[PathAndCacheKey],
@@ -110,7 +150,9 @@ async def get_add_remove_for_tag(
         if stats.size <= MAX_FILE_SIZE_BYTES
     }
 
-    saved = get_saved_items_for_tag(tag)
+    # saved = get_saved_items_for_tag(tag)
+    saved = get_saved_items_for_tag(tag, only_paths=only_paths)
+    # print(f"[planner] tag={tag.artifact_id} only_paths={only_paths} saved_rows={len(saved)}")
 
     update_new_version: list[PathAndCacheKey] = []
     update_old_version: list[PathAndCacheKey] = []
@@ -120,6 +162,8 @@ async def get_add_remove_for_tag(
     # Group saved rows by path
     path_groups: dict[str, dict] = {}
     for path, cache_key, last_updated in saved:
+        # if only_paths is not None and path not in only_paths:
+        #     continue          # ignore everything outside the requested scope
         if path not in path_groups:
             path_groups[path] = {
                 "latest": {"last_updated": last_updated, "cache_key": cache_key},
@@ -285,9 +329,12 @@ async def get_compute_delete_add_remove(
     current_files: FileStatsMap,
     read_file: Callable[[str], Awaitable[str]],
     repo_name: Optional[str],
+    *,
+    only_paths: Optional[set[str]] = None,
 ) -> tuple[RefreshIndexResults, list[PathAndCacheKey], MarkCompleteCallback, MarkCompleteCallback]:
+    
     add, remove, last_updated, mark_complete = await get_add_remove_for_tag(
-        tag, current_files, read_file
+        tag, current_files, read_file, only_paths=only_paths
     )
 
     compute: list[PathAndCacheKey] = []
@@ -447,3 +494,4 @@ class IndexLock:
         db = SqliteDB.get()
         db.execute("DELETE FROM indexing_lock WHERE locked = 1")
         db.commit()
+        

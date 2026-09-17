@@ -4,6 +4,7 @@ from typing import List
 
 from openai import AsyncOpenAI  # pip install openai
 
+from embeddings.base import Embeddings
 
 # text-embedding-3-* accept 8191 tokens, but for code chunks 512–1024 is
 # plenty and keeps cost/latency down.
@@ -14,7 +15,7 @@ _MODEL_DEFAULTS = {
 }
 
 
-class OpenAIEmbeddings:
+class OpenAIEmbeddings(Embeddings):
     def __init__(
         self,
         model: str = "text-embedding-3-small",

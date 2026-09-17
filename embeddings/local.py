@@ -4,6 +4,7 @@ import asyncio
 from typing import List
 
 from sentence_transformers import SentenceTransformer
+from embeddings.base import Embeddings
 
 
 # Sensible defaults per model family. max_embedding_chunk_size is in tokens
@@ -21,12 +22,12 @@ _DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 _DEFAULT_CHUNK_SIZE = 512
 
 
-class LocalEmbeddings:
+class LocalEmbeddings(Embeddings):
     """Concrete Embeddings provider backed by sentence-transformers.
 
     Satisfies the `Embeddings` Protocol structurally — no inheritance required.
     """
-
+    
     def __init__(
         self,
         model_name: str = _DEFAULT_MODEL,
@@ -42,6 +43,7 @@ class LocalEmbeddings:
             if max_embedding_chunk_size is not None
             else _MODEL_DEFAULTS.get(model_name, _DEFAULT_CHUNK_SIZE)
         )
+        
 
     async def embed(self, texts: List[str]) -> List[List[float]]:
         if not texts:

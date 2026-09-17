@@ -221,5 +221,6 @@ __marimo__/
 
 # my files
 docs/flows
-test.py
+# test.py
+# test2.py
 index.ts

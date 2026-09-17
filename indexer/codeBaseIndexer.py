@@ -49,7 +49,7 @@ from base.index_types import (
 from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
 from watcher.file_watcher import FileWatcher, AutoFileWatcher
-from utils.uri import get_uri_path_basename
+from utils.uri import get_uri_path_basename, get_uri_to_path
 
 # from dataclasses import dataclass
 
@@ -232,14 +232,53 @@ class CodeIndexer:
     # ------------------------------------------------------------------
     # Index construction (getIndexesToBuild equivalent)
     # ------------------------------------------------------------------
+    # async def start_watch(
+    # self,
+    # workspace_dirs: list[str],
+    # ):
+    #     watcher = self.watcher.watch(workspace_dirs)
+    #     async for changed_files in watcher:
+    #         async for update in self.refresh_codebase_index_files(changed_files):
+    #             yield update
+    
     async def start_watch(
-    self,
-    workspace_dirs: list[str],
+        self,
+        workspace_dirs: list[str],
+        flush_interval: float = 10.0,
     ):
+        """
+        Consume the file watcher, batch changes, and flush every
+        `flush_interval` seconds. Yields IndexingProgressUpdate on each flush.
+        """
+        pending: set[str] = set()
         watcher = self.watcher.watch(workspace_dirs)
-        async for changed_files in watcher:
-            async for update in self.refresh_codebase_index_files(changed_files):
-                yield update
+
+        # We need to pump the watcher and the timer concurrently.
+        # Use a helper task that fills `pending` from the watcher.
+        async def _fill():
+            async for batch in watcher:
+                pending.update(batch)
+
+        fill_task = asyncio.create_task(_fill())
+
+        try:
+            while True:
+                await asyncio.sleep(flush_interval)
+
+                if not pending:
+                    continue
+
+                files = sorted(pending)
+                pending.clear()
+
+                async for update in self.refresh_codebase_index_files(files):
+                    yield update
+        finally:
+            fill_task.cancel()
+            try:
+                await fill_task
+            except asyncio.CancelledError:
+                pass
 
     async def get_indexes_to_build(self) -> List[CodebaseIndexer]:
         """
@@ -762,11 +801,14 @@ class CodeIndexer:
         self,
         file: str,
         workspace_dirs: Sequence[str],
+        cancellation: Optional[CancellationToken] = None
     ) -> None:
         """
         Re-index one file against every configured backend.
         No-op when paused or when the file lies outside workspace_dirs.
         """
+        token = cancellation or CancellationToken()
+        token.throw_if_cancelled()              
         if self._pause.paused:
             return
 
@@ -778,22 +820,32 @@ class CodeIndexer:
         repo_name = await self.fs.get_repo_name(found_in_dir)
         indexes = await self.get_indexes_to_build()
         stats = await self.fs.get_file_stats([file])
-        if not stats:
-            return
-        file_path = next(iter(stats.keys()))
+        # print(f"[refresh_file] file={file!r} stats_keys={list(stats.keys())!r}")
 
+        if stats:
+            file_path = next(iter(stats.keys()))
+            # print(f"[refresh_file] taking stats branch → {file_path!r}")
+        else:
+            file_path = get_uri_to_path(file)
+            # print(f"[refresh_file] taking fallback branch → {file_path!r}")
+            
         for index in indexes:
+            token.throw_if_cancelled()
             tag = IndexTag(
                 directory=found_in_dir,
                 branch=branch,
                 artifact_id=index.artifact_id,
             )
+            # Pass the path even when stats is empty so the planner sees a deletion
+            only = {file_path}
+            
             full_results, full_last_updated, mark_complete, mark_last_updated = (
                 await get_compute_delete_add_remove(
                     tag,
                     dict(stats),
                     self.fs.read_file,
                     repo_name,
+                    only_paths=only,
                 )
             )
             results, last_updated = self._single_file_index_ops(
@@ -815,8 +867,13 @@ class CodeIndexer:
     async def refresh_files(
         self,
         files: Sequence[str],
+        cancellation: Optional[CancellationToken] = None
     ) -> AsyncGenerator[IndexingProgressUpdate, None]:
+        
         """Re-index an explicit list of files, yielding progress."""
+        
+        token = cancellation or CancellationToken()
+        
         if not files:
             yield IndexingProgressUpdate(
                 progress=1.0, desc="Indexing Complete", status="done"
@@ -829,12 +886,13 @@ class CodeIndexer:
 
         try:
             for file in files:
+                token.throw_if_cancelled()
                 yield IndexingProgressUpdate(
                     progress=progress,
                     desc=f"Indexing file {file}...",
                     status="indexing",
                 )
-                await self.refresh_file(file, workspace_dirs)
+                await self.refresh_file(file, workspace_dirs, cancellation=token)
                 progress += progress_per
 
                 if self._pause.paused:
@@ -844,6 +902,8 @@ class CodeIndexer:
             yield IndexingProgressUpdate(
                 progress=1.0, desc="Indexing Complete", status="done"
             )
+        except asyncio.CancelledError:
+            return
         except Exception as err:
             yield self._handle_error(err)
 
@@ -924,9 +984,12 @@ class CodeIndexer:
         self._file_token = token
         
         try:
-            async for update in self.refresh_files(files):
+            async for update in self.refresh_files(files, cancellation=token):
+                # print("here")
                 self._state = update
                 yield update
+        except asyncio.CancelledError:
+            return
         except Exception as err:
             upd = self._handle_error(err)
             self._state = upd

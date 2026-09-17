@@ -181,24 +181,20 @@ class PollingFileWatcher:
         self.ignore_hidden = ignore_hidden
         self._state: dict[str, float] = {}
 
-    def _scan(self, roots: List[str]) -> List[str]:
+    def _scan(self, roots: List[str], report_new: bool = True) -> List[str]:
         changed = []
-
         current: dict[str, float] = {}
 
         for root in roots:
             root_path = Path(root.replace("file://", ""))
-
             if not root_path.exists():
                 continue
 
             for path in root_path.rglob("*"):
                 if not path.is_file():
                     continue
-
                 if self.ignore_hidden and is_hidden(str(path)):
                     continue
-
                 try:
                     mtime = path.stat().st_mtime_ns
                 except OSError:
@@ -210,9 +206,9 @@ class PollingFileWatcher:
                 previous = self._state.get(uri)
 
                 if previous is None:
-                    continue
-
-                if previous != mtime:
+                    if report_new:
+                        changed.append(uri)
+                elif previous != mtime:
                     changed.append(uri)
 
         # Detect deleted files
@@ -224,17 +220,16 @@ class PollingFileWatcher:
         return sorted(set(changed))
 
     async def watch(self, roots: List[str]) -> AsyncIterator[List[str]]:
-        # Initial snapshot
-        self._scan(roots)
+        # Initial snapshot: populate state without reporting anything
+        self._scan(roots, report_new=False)
 
         while True:
             await asyncio.sleep(self.poll_interval)
 
-            changed = self._scan(roots)
+            changed = self._scan(roots, report_new=True)
 
             if changed:
                 yield changed
-
 
 # ---------------------------------------------------------------------
 # Auto chooser
@@ -262,3 +257,19 @@ class AutoFileWatcher:
     async def watch(self, roots: List[str]) -> AsyncIterator[List[str]]:
         async for files in self._impl.watch(roots):
             yield files
+            
+            
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
+hi = "this is great"
