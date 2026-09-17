@@ -34,7 +34,7 @@ from utils.uri import get_uri_file_extension
 
 class LanguageName(str, Enum):
     CPP = "cpp"
-    C_SHARP = "c_sharp"
+    C_SHARP = "csharp"
     C = "c"
     CSS = "css"
     PHP = "php"
@@ -175,7 +175,7 @@ async def get_parser_for_file(filepath: str) -> Optional[Parser]:
         parser = Parser()
         parser.language = language
         return parser
-    except Exception as e:  # noqa: BLE001 – mirror TS `catch (e)`
+    except Exception as e: 
         print(f"Unable to load language for file {filepath} {e}")
         return None
 

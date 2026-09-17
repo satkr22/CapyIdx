@@ -11,7 +11,8 @@ from lance_db.lanceDbIndex import LanceDbIndex
 from embeddings.local import LocalEmbeddings
 
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
-WORKSPACE = Path.cwd()
+WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+# WORKSPACE = Path.cwd()
 
 async def main():
     SqliteDB.initialize()

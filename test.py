@@ -43,8 +43,8 @@ from indexer.codeBaseIndexer import CodeIndexer
 
 
 # Change this to the repository you want to index
-# WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork")
-# WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot")
+# WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+# WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
 WORKSPACE = Path.cwd()
 
 # SQLite database location
