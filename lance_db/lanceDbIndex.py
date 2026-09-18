@@ -118,6 +118,29 @@ class LanceDbIndex(CodebaseIndexer):
                 db.commit()
 
         await migrate("lancedb_sqlite_artifact_id_column", _migrate)
+        
+    async def get_existing_chunks(self, item: PathAndCacheKey) -> list[Chunk]:
+        rows = self.db.execute(
+            """
+            SELECT id, cacheKey, path, idx, startLine, endLine, content
+            FROM chunks
+            WHERE path = ? AND cacheKey = ?
+            ORDER BY idx
+            """,
+            (item.path, item.cache_key),
+        ).fetchall()
+
+        return [
+            Chunk(
+                content=row["content"],
+                start_line=row["startLine"],
+                end_line=row["endLine"],
+                digest=row["cacheKey"],
+                filepath=row["path"],
+                index=row["idx"], 
+            )
+            for row in rows
+        ]
 
     async def compute_rows(self, items: List[PathAndCacheKey]) -> List[dict]:
         chunk_map = await self.collect_chunks(items)
@@ -145,10 +168,15 @@ class LanceDbIndex(CodebaseIndexer):
         chunk_map: Dict[str, ItemWithChunks] = {}
         for item in items:
             try:
-                content = await self.fs.read_file(item.path)
-                if not should_chunk(item.path, content):
+                # content = await self.fs.read_file(item.path)
+                # if not should_chunk(item.path, content):
+                    # continue
+                # chunks = await self.get_chunks(item, content)
+                
+                # using the chunks created by chunkCodebaseIndexer.py
+                chunks = await self.get_existing_chunks(item)
+                if not chunks:
                     continue
-                chunks = await self.get_chunks(item, content)
                 chunk_map[item.path] = ItemWithChunks(item=item, chunks=chunks)
             except Exception as e:
                 print(f"LanceDBIndex, skipping {item.path}: {e}")

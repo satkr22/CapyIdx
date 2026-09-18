@@ -8,9 +8,9 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional, List, Dict, Tuple
 
-from tree_sitter import QueryCursor
+from tree_sitter import QueryCursor, Node, Query
 
 import utils.tree_sitter as _utils_tree_sitter
 from base.db import SqliteDB
@@ -86,7 +86,6 @@ _QUERY_BASE_DIR: Path = (
 
 
 class CodeSnippetsCodebaseIndex(CodebaseIndexer):
-    """Port of `CodeSnippetsCodebaseIndex` from CodeSnippetsIndex.ts."""
 
     relative_expected_time: float = 1.0
     artifact_id: str = "codeSnippets"
@@ -225,14 +224,22 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         return capture[1] if isinstance(capture, tuple) else capture.node
 
     @staticmethod
-    def _get_snippets_from_match(query: Any, match: Any) -> SnippetChunk:
-        body_types_to_treat_as_signatures = [
+    def _get_snippets_from_match(match: Tuple[int, Dict[str, List[Node]]]) -> SnippetChunk:
+        """
+        Convert a single tree-sitter match into a SnippetChunk.
+        
+        `match` is the structure returned by QueryCursor.matches():
+            (pattern_index, {capture_name: [Node, ...]})
+        """
+        pattern_index, captures = match
+
+        body_types_to_treat_as_signatures = {
             "interface_declaration",  # TypeScript, Java
             "struct_item",            # Rust
             "type_spec",              # Go
-        ]
+        }
 
-        body_capture_group_prefixes = ["definition", "reference"]
+        body_capture_group_prefixes = {"definition", "reference"}
 
         title = ""
         content = ""
@@ -241,33 +248,30 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         end_line = 0
         has_seen_body = False
 
-        # This loop assumes that the ordering of the capture groups is
-        # representative of the structure of the language, e.g. for a
-        # TypeScript match on a function, `function myFunc(param: string): string`,
-        # the first capture would be the `myFunc`, the second capture would be
-        # the `(param: string)`, etc.
-        for capture in match.captures:
-            # Assume we are capturing groups using a dot syntax for more
-            # precise groupings. However, for this case, we only care about
-            # the first substring.
-            name = CodeSnippetsCodebaseIndex._capture_name(query, capture)
-            node = CodeSnippetsCodebaseIndex._capture_node(capture)
+        # Flatten the captures dict into an ordered list of (name, node)
+        # so the original left-to-right processing order is preserved.
+        ordered_captures: List[Tuple[str, Node]] = []
+        for name, nodes in captures.items():
+            for node in nodes:
+                ordered_captures.append((name, node))
 
-            trimmed_capture_name = name.split(".")[0]
+        for name, node in ordered_captures:
+            # "definition.function" → "definition"
+            trimmed_capture_name = name.split(".", 1)[0]
 
-            node_bytes = node.text
-            node_text = node_bytes.decode("utf-8") if node_bytes else ""
+            # node.text is bytes in py-tree-sitter
+            node_text = node.text.decode("utf-8") if node.text else ""
             node_type = node.type
 
             if trimmed_capture_name in body_capture_group_prefixes:
                 if node_type in body_types_to_treat_as_signatures:
-                    # Note we override whatever existing value there is here
+                    # Override whatever was there before
                     signature = node_text
                     has_seen_body = True
 
                 content = node_text
-                start_line = node.start_point.row
-                end_line = node.end_point.row
+                start_line = node.start_point[0]   # row
+                end_line = node.end_point[0]       # row
             else:
                 if trimmed_capture_name == "name":
                     title = node_text
@@ -281,7 +285,7 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         return SnippetChunk(
             title=title,
             content=content,
-            signature=signature,
+            signature=signature.strip(),
             start_line=start_line,
             end_line=end_line,
         )
@@ -289,32 +293,36 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
     # ------------------------------------------------------------------
     # File → snippets
     # ------------------------------------------------------------------
-
     async def get_snippets_in_file(
-        self, filepath: str, contents: str
-    ) -> list[SnippetChunk]:
+        self, 
+        filepath: str,
+        contents: str,
+    ) -> List[SnippetChunk]:
+        """
+        Parse a file and extract all code snippets defined by the
+        corresponding .scm query.
+        """
         parser = await get_parser_for_file(filepath)
         if parser is None:
             return []
 
-        ast = parser.parse(contents.encode("utf-8"))
+        # py-tree-sitter expects bytes
+        tree = parser.parse(contents.encode("utf-8"))
 
         language = get_full_language_name(filepath)
-        if language is None:
+        if not language:
             return []
 
         query_path = _QUERY_BASE_DIR / f"{language.value}.scm"
-        query = await get_query_for_file(filepath, query_path)
+        query: Optional[Query] = await get_query_for_file(filepath, query_path)
         if query is None:
             return []
 
-        matches = QueryCursor(query).matches(ast.root_node)
-        if not matches:
-            return []
+        cursor = QueryCursor(query)
+        matches = cursor.matches(tree.root_node)
 
-        return [
-            self._get_snippets_from_match(query, match) for match in matches
-        ]
+        return [self._get_snippets_from_match(m) for m in matches]
+    
 
     # ------------------------------------------------------------------
     # Update
@@ -341,7 +349,7 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                     compute.path,
                     await self.fs.read_file(compute.path),
                 )
-            except Exception:
+            except Exception as e:
                 # If can't parse, assume malformatted code
                 pass
 
@@ -369,6 +377,7 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                     "VALUES (?, ?)",
                     (last_id, tag_string),
                 )
+                
             db.commit()
 
             yield IndexingProgressUpdate(

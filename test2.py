@@ -11,8 +11,8 @@ from lance_db.lanceDbIndex import LanceDbIndex
 from embeddings.local import LocalEmbeddings
 
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
-WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
-# WORKSPACE = Path.cwd()
+# WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+WORKSPACE = Path.cwd()
 
 async def main():
     SqliteDB.initialize()
@@ -20,7 +20,7 @@ async def main():
     fs = DiskOperations(roots=[str(WORKSPACE)])
     emb = LocalEmbeddings()
 
-    chunk_index = ChunkCodebaseIndex(db=db, filesystem=fs, max_chunk_size=1024)
+    chunk_index = ChunkCodebaseIndex(db=db, filesystem=fs, max_chunk_size=emb.max_embedding_chunk_size)
     fts_index = FullTextSearchCodebaseIndex(db=db)
     snippets_index = CodeSnippetsCodebaseIndex(filesystem=fs, db=db)
     lance_index = await LanceDbIndex.create(db=db, embeddings_provider=emb, filesystem=fs)
@@ -54,7 +54,7 @@ async def main():
             pass
 
 async def _consume(indexer, workspace_dirs):
-    async for update in indexer.start_watch(workspace_dirs):
+    async for update in indexer.start_watch(workspace_dirs, flush_interval=5):
         print(f"[watch] {update.progress:.1%} {update.desc}")
 
 if __name__ == "__main__":

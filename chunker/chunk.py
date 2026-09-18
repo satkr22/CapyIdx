@@ -86,14 +86,10 @@ async def chunk_document(
     async def _resolve_chunk(
         chunk_without_id: ChunkWithoutID,
     ) -> Optional[Chunk]:
-        # Mirrors:
-        #   if ((await countTokensAsync(chunkWithoutId.content)) > maxChunkSize)
-        #       return resolve(undefined);
+
         if await count_tokens_async(chunk_without_id.content) > max_chunk_size:
             return None
-
-        # Mirrors `index: index++` — read then bump with no await between,
-        # so concurrent tasks can't collide.
+        
         current_index = index_box[0]
         index_box[0] += 1
 
