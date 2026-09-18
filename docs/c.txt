@@ -1,0 +1,547 @@
+146
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+0
+52
+54
+class ItemWithChunks:
+    item: PathAndCacheKey
+    chunks: List[Chunk]
+----------------------------------------------------------------------
+
+
+
+147
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+1
+57
+578
+class LanceDbIndex(CodebaseIndexer):
+    lance: Any = None
+
+    relative_expected_time: float = 13
+
+    @staticmethod
+    async def create(
+        db: sqlite3.Connection,
+        embeddings_provider: Embeddings,
+        filesystem: FileSystem,
+    ) -> Optional[LanceDbIndex]:
+        # if not is_supported_lance_db_cpu_target_for_linux():
+        #     return None
+        try:
+            LanceDbIndex.lance = importlib.import_module("lancedb")
+            return LanceDbIndex(db, embeddings_provider, filesystem)
+        except Exception as e:
+            print("Failed to import lancedb. If you're on a pre-Haswell x86_64 CPU,\ninstall the compatibility wheel: pip uninstall lancedb && pip install lancedb-compat':", e)
+            return None
+
+    def __init__(
+        self,
+        db: sqlite3.Connection,
+        embeddings_provider: Embeddings,
+        filesystem: FileSystem,
+    ):
+        ...
+
+    def table_name_for_tag(self, tag: IndexTag) -> str:
+        ...
+
+    async def create_sqlite_cache_table(self, db: sqlite3.Connection):
+        ...
+        
+    async def get_existing_chunks(self, item: PathAndCacheKey) -> list[Chunk]:
+        ...
+
+    async def compute_rows(self, items: List[PathAndCacheKey]) -> List[dict]:
+        ...
+
+    async def collect_chunks(
+        self, items: List[PathAndCacheKey]
+    ) -> Dict[str, ItemWithChunks]:
+        ...
+
+    async def get_chunks(self, item: PathAndCacheKey, content: str) -> List[Chunk]:
+        ...
+
+    async def get_embeddings(self, chunks: List[Chunk]) -> List[List[float]]:
+        ...
+
+    def create_lance_db_rows(
+        self,
+        chunk_map: Dict[str, ItemWithChunks],
+        embeddings: List[List[float]],
+    ) -> List[dict]:
+        ...
+
+    def parse_vector(self, vector: str) -> List[float]:
+        ...
+    async def update(
+        self,
+        tag: IndexTag,
+        context: IndexContext,
+        results: RefreshIndexResults,
+        mark_complete: MarkCompleteCallback,
+    ) -> AsyncGenerator[IndexingProgressUpdate, None]:
+        ...
+----------------------------------------------------------------------
+
+
+
+148
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+2
+63
+75
+async def create(
+        db: sqlite3.Connection,
+        embeddings_provider: Embeddings,
+        filesystem: FileSystem,
+    ) -> Optional[LanceDbIndex]:
+        # if not is_supported_lance_db_cpu_target_for_linux():
+        #     return None
+        try:
+            LanceDbIndex.lance = importlib.import_module("lancedb")
+            return LanceDbIndex(db, embeddings_provider, filesystem)
+        except Exception as e:
+            print("Failed to import lancedb. If you're on a pre-Haswell x86_64 CPU,\ninstall the compatibility wheel: pip uninstall lancedb && pip install lancedb-compat':", e)
+            return None
+----------------------------------------------------------------------
+
+
+
+149
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+3
+77
+88
+def __init__(
+        self,
+        db: sqlite3.Connection,
+        embeddings_provider: Embeddings,
+        filesystem: FileSystem,
+    ):
+        if LanceDbIndex.lance is None:
+            raise RuntimeError("LanceDB not initialized")
+        self.db = db
+        self.embeddings_provider = embeddings_provider
+        self.artifact_id = f"vectordb::{embeddings_provider.embedding_id}"
+        self.fs = filesystem
+----------------------------------------------------------------------
+
+
+
+150
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+4
+90
+91
+def table_name_for_tag(self, tag: IndexTag) -> str:
+        return re.sub(r"[^\w\-_.]", "", tag_to_string(tag))
+----------------------------------------------------------------------
+
+
+
+151
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+5
+93
+119
+async def create_sqlite_cache_table(self, db: sqlite3.Connection):
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lance_db_cache (
+                uuid TEXT PRIMARY KEY,
+                cacheKey TEXT NOT NULL,
+                path TEXT NOT NULL,
+                artifact_id TEXT NOT NULL,
+                vector TEXT NOT NULL,
+                startLine INTEGER NOT NULL,
+                endLine INTEGER NOT NULL,
+                contents TEXT NOT NULL
+            )
+            """
+        )
+        db.commit()
+
+        async def _migrate():
+            pragma = db.execute("PRAGMA table_info(lance_db_cache)").fetchall()
+            has_artifact_id_col = any(row["name"] == "artifact_id" for row in pragma)
+            if not has_artifact_id_col:
+                db.execute(
+                    "ALTER TABLE lance_db_cache ADD COLUMN artifact_id TEXT NOT NULL DEFAULT 'UNDEFINED'"
+                )
+                db.commit()
+
+        await migrate("lancedb_sqlite_artifact_id_column", _migrate)
+----------------------------------------------------------------------
+
+
+
+152
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+6
+121
+142
+async def get_existing_chunks(self, item: PathAndCacheKey) -> list[Chunk]:
+        rows = self.db.execute(
+            """
+            SELECT id, cacheKey, path, idx, startLine, endLine, content
+            FROM chunks
+            WHERE path = ? AND cacheKey = ?
+            ORDER BY idx
+            """,
+            (item.path, item.cache_key),
+        ).fetchall()
+
+        return [
+            Chunk(
+                content=row["content"],
+                start_line=row["startLine"],
+                end_line=row["endLine"],
+                digest=row["cacheKey"],
+                filepath=row["path"],
+                index=row["idx"], 
+            )
+            for row in rows
+        ]
+----------------------------------------------------------------------
+
+
+
+153
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+7
+144
+162
+async def compute_rows(self, items: List[PathAndCacheKey]) -> List[dict]:
+        chunk_map = await self.collect_chunks(items)
+        all_chunks = [chunk for item in chunk_map.values() for chunk in item.chunks]
+        embeddings = await self.get_embeddings(all_chunks)
+
+        for i in range(len(embeddings) - 1, -1, -1):
+            if embeddings[i] is None:
+                chunk = all_chunks[i]
+                item_with_chunks = chunk_map.get(chunk.filepath)
+                if item_with_chunks:
+                    chunks = item_with_chunks.chunks
+                    try:
+                        index = chunks.index(chunk)
+                        chunks.pop(index)
+                    except ValueError:
+                        pass
+                embeddings.pop(i)
+
+        return self.create_lance_db_rows(chunk_map, embeddings)
+----------------------------------------------------------------------
+
+
+
+154
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+8
+164
+182
+async def collect_chunks(
+        self, items: List[PathAndCacheKey]
+    ) -> Dict[str, ItemWithChunks]:
+        chunk_map: Dict[str, ItemWithChunks] = {}
+        for item in items:
+            try:
+                # content = await self.fs.read_file(item.path)
+                # if not should_chunk(item.path, content):
+                    # continue
+                # chunks = await self.get_chunks(item, content)
+                
+                # using the chunks created by chunkCodebaseIndexer.py
+                chunks = await self.get_existing_chunks(item)
+                if not chunks:
+                    continue
+                chunk_map[item.path] = ItemWithChunks(item=item, chunks=chunks)
+            except Exception as e:
+                print(f"LanceDBIndex, skipping {item.path}: {e}")
+        return chunk_map
+----------------------------------------------------------------------
+
+
+
+155
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+9
+184
+198
+async def get_chunks(self, item: PathAndCacheKey, content: str) -> List[Chunk]:
+        if not self.embeddings_provider:
+            return []
+        chunks: List[Chunk] = []
+        chunk_params = ChunkDocumentParam(
+            filepath=item.path,
+            contents=content,
+            maxChunkSize=self.embeddings_provider.max_embedding_chunk_size,
+            digest=item.cache_key,
+        )
+        async for chunk in chunk_document(chunk_params):
+            if len(chunk.content) == 0:
+                raise ValueError("did not chunk properly")
+            chunks.append(chunk)
+        return chunks
+----------------------------------------------------------------------
+
+
+
+156
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+10
+200
+209
+async def get_embeddings(self, chunks: List[Chunk]) -> List[List[float]]:
+        if not self.embeddings_provider:
+            return []
+        try:
+            return await self.embeddings_provider.embed([c.content for c in chunks])
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to generate embeddings for {len(chunks)} chunks "
+                f"with provider: {self.embeddings_provider.embedding_id}: {e}"
+            ) from e
+----------------------------------------------------------------------
+
+
+
+157
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+11
+211
+233
+def create_lance_db_rows(
+        self,
+        chunk_map: Dict[str, ItemWithChunks],
+        embeddings: List[List[float]],
+    ) -> List[dict]:
+        results: List[dict] = []
+        embedding_index = 0
+        for path, item_with_chunks in chunk_map.items():
+            item = item_with_chunks.item
+            for chunk in item_with_chunks.chunks:
+                results.append(
+                    {
+                        "path": path,
+                        "cachekey": item.cache_key,
+                        "uuid": str(uuid.uuid4()),
+                        "vector": embeddings[embedding_index],
+                        "startLine": chunk.start_line,
+                        "endLine": chunk.end_line,
+                        "contents": chunk.content,
+                    }
+                )
+                embedding_index += 1
+        return results
+----------------------------------------------------------------------
+
+
+
+158
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+12
+235
+242
+def parse_vector(self, vector: str) -> List[float]:
+        try:
+            return json.loads(vector)
+        except json.JSONDecodeError:
+            try:
+                return json.loads(f"[{vector}]")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to parse vector: {vector}") from e
+----------------------------------------------------------------------
+
+
+
+159
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+13
+245
+411
+class LanceDbIndex(CodebaseIndexer):
+    ...
+
+    async def update(
+        self,
+        tag: IndexTag,
+        context: IndexContext,
+        results: RefreshIndexResults,
+        mark_complete: MarkCompleteCallback,
+    ) -> AsyncGenerator[IndexingProgressUpdate, None]:
+        ...
+----------------------------------------------------------------------
+
+
+
+160
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+14
+270
+291
+async def add_computed_lance_db_rows(
+            path_and_cache_keys: List[PathAndCacheKey],
+            computed_rows: List[dict],
+        ):
+            nonlocal lance_table, need_to_create_lance_table
+            if lance_table is not None:
+                if computed_rows:
+                    await asyncio.to_thread(lance_table.add, computed_rows)
+            elif lance_table_name in existing_lance_tables:
+                lance_table = await asyncio.to_thread(
+                    lance_db.open_table, lance_table_name
+                )
+                need_to_create_lance_table = False
+                if computed_rows:
+                    await asyncio.to_thread(lance_table.add, computed_rows)
+            elif computed_rows:
+                lance_table = await asyncio.to_thread(
+                    lance_db.create_table, lance_table_name, computed_rows
+                )
+                need_to_create_lance_table = False
+
+            await mark_complete(path_and_cache_keys, IndexResultType.COMPUTE)
+----------------------------------------------------------------------
+
+
+
+161
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+15
+413
+443
+async def _retrieve_for_tag(
+        self,
+        tag: IndexTag,
+        n: int,
+        directory: Optional[str],
+        vector: List[float],
+        db: Any,
+    ) -> List[dict]:
+        
+        table_name = self.table_name_for_tag(tag)
+        table_names = await asyncio.to_thread(db.table_names)
+        if table_name not in table_names:
+            print(f"Table not found in LanceDB {table_name}")
+            return []
+
+        table = await asyncio.to_thread(db.open_table, table_name)
+
+        def _search_sync() -> List[dict]:
+            # This entire chain is CPU + disk work; keep it in one sync function
+            # so it runs as a single unit on the worker thread.
+            if directory:
+                return (
+                    table.search(vector)
+                    .where(f"path LIKE '{directory}%'")
+                    .limit(300)
+                    .to_list()
+                )
+            return table.search(vector).limit(n).to_list()
+
+        results = await asyncio.to_thread(_search_sync)
+        return results[:n]
+----------------------------------------------------------------------
+
+
+
+162
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+16
+445
+535
+class LanceDbIndex(CodebaseIndexer):
+    ...
+
+    async def retrieve(
+        self,
+        query: str,
+        n: int,
+        tags: List[BranchAndDir],
+        filter_directory: Optional[str],
+    ) -> List[Chunk]:
+        ...
+----------------------------------------------------------------------
+
+
+
+163
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+17
+537
+575
+async def insert_rows(self, db: sqlite3.Connection, rows: List[dict]):
+        try:
+            if not rows:
+                return
+            
+            delete_params = list({
+                (r["cachekey"], r["path"], self.artifact_id)
+                for r in rows
+            })
+            
+            db.executemany(
+                """
+                DELETE FROM lance_db_cache
+                WHERE cacheKey = ? AND path = ? AND artifact_id = ?
+                """,
+                delete_params,
+            )
+            
+            db.executemany(
+                "INSERT INTO lance_db_cache (uuid, cacheKey, path, artifact_id, vector, startLine, endLine, contents) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        r["uuid"],
+                        r["cachekey"],
+                        r["path"],
+                        self.artifact_id,
+                        json.dumps(r["vector"]),
+                        r["startLine"],
+                        r["endLine"],
+                        r["contents"],
+                    )
+                    for r in rows
+                ],
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RuntimeError("error inserting into lance_db_cache table") from e
+----------------------------------------------------------------------
+
+
+
+164
+9c09ee3f18c317f0595248aeb055f3648a213928c397b116c410bf32807def8b
+/home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+18
+577
+578
+def format_list_plurality(self, word: str, length: int) -> str:
+        return word if length <= 1 else f"{word}s"
+----------------------------------------------------------------------
+
+
+
