@@ -13,7 +13,7 @@ class SqliteDB:
     @staticmethod
     def default_path() -> Path:
         
-        return get_coreIndexer_global_path() / ".codebase_index" / "index2.sqlite"
+        return get_coreIndexer_global_path() / ".codebase_index" / "index.sqlite"
 
     @classmethod
     def initialize(cls, db_path: Optional[Path] = None) -> None:
