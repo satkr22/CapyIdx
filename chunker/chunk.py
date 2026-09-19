@@ -19,7 +19,7 @@ from utils.count_tokens import count_tokens_async
 from utils.tree_sitter import supported_languages
 from utils.uri import get_uri_file_extension, get_uri_path_basename
 from chunker.basic import basic_chunker
-from chunker.code2 import code_chunker
+from chunker.code import code_chunker
 
 
 @dataclass
