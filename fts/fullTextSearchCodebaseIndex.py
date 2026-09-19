@@ -70,13 +70,17 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
             );
 
             CREATE TABLE IF NOT EXISTS fts_metadata (
-                id INTEGER PRIMARY KEY,
-                path TEXT NOT NULL,
-                cacheKey TEXT NOT NULL,
-                chunkId INTEGER NOT NULL,
-                FOREIGN KEY (chunkId) REFERENCES chunks (id),
-                FOREIGN KEY (id) REFERENCES fts (rowid)
+                id        INTEGER PRIMARY KEY,   -- = fts.rowid (soft link, no FK)
+                path      TEXT    NOT NULL,
+                cacheKey  TEXT    NOT NULL,
+                chunkId   TEXT    NOT NULL,      -- chunks.id is a UUID string
+                FOREIGN KEY (chunkId) REFERENCES chunks (id) ON DELETE CASCADE
             );
+
+            CREATE INDEX IF NOT EXISTS idx_fts_metadata_chunkid
+                ON fts_metadata(chunkId);
+            CREATE INDEX IF NOT EXISTS idx_fts_metadata_path_cachekey
+                ON fts_metadata(path, cacheKey);
             """
         )
         self.db.commit()
@@ -159,6 +163,7 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
 
         # Delete ----------------------------------------------------- #
         for item in results.delete:
+            # 1) delete from the virtual table first (no FK, no cascade)
             self.db.execute(
                 """
                 DELETE FROM fts WHERE rowid IN (
@@ -167,14 +172,17 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
                 """,
                 (item.path, item.cache_key),
             )
+            # 2) delete from fts_metadata; the chunkId FK cascade is enough here,
+            #    but a direct delete keeps the old (path, cacheKey) cleanup explicit.
             self.db.execute(
                 "DELETE FROM fts_metadata WHERE path = ? AND cacheKey = ?",
                 (item.path, item.cache_key),
             )
             self.db.commit()
-
             await mark_complete([item], IndexResultType.DELETE)
 
+        
+        
     # ------------------------------------------------------------------ #
     # Retrieve
     # ------------------------------------------------------------------ #

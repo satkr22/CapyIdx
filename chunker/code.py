@@ -14,13 +14,13 @@ Notes on the port:
 """
 
 from typing import AsyncGenerator, Optional, Union
-
+from uuid import UUID, uuid4
 from tree_sitter import Node
 
 from utils.count_tokens import count_tokens_async
-# Source module is tree-sitter.py; adjust the import path to however you expose it.
 from utils.tree_sitter import get_parser_for_file
 from base.index_d import ChunkWithoutID
+
 
 
 # ---------------------------------------------------------------------------
@@ -65,15 +65,17 @@ async def collapse_children(
     collapse_block_types: list,
     max_chunk_size: int,
 ) -> bytes:
+    
     code = code[: node.end_byte]
     block = first_child(node, block_types)
     collapsed_children: list[bytes] = []
-
+    method_symbols = []
     if block is not None:
         children_to_collapse = [
             child for child in block.children if child.type in collapse_types
         ]
         for child in reversed(children_to_collapse):
+            
             grand_child = first_child(child, collapse_block_types)
             if grand_child is not None:
                 start = grand_child.start_byte
@@ -194,6 +196,143 @@ async def construct_function_definition_chunk(
     return collapsed_body
 
 
+# ---------------------------------------------------------------------------
+# Splitting large functions/methods (preserve all code, never collapse it away)
+# ---------------------------------------------------------------------------
+
+def _build_function_header(node: Node, code: bytes) -> bytes:
+    """
+    Build the "context header" for a function/method: its own signature, plus
+    (if it lives inside a class/impl block) the enclosing class signature.
+    This mirrors the is_in_class branch of construct_function_definition_chunk,
+    but returns only the header - no body/placeholder - since callers append
+    their own body content after it.
+    """
+    body_node = node.children[-1]
+    signature = code[node.start_byte:body_node.start_byte]
+
+    parent_node = node.parent
+    class_node = parent_node.parent if parent_node is not None else None
+    is_in_class = (
+        parent_node is not None
+        and parent_node.type in ("block", "declaration_list")
+        and class_node is not None
+        and class_node.type in ("class_definition", "impl_item")
+    )
+
+    if is_in_class:
+        assert parent_node is not None
+        assert class_node is not None
+        class_block = parent_node
+        class_header = code[class_node.start_byte:class_block.start_byte]
+        indent = b" " * node.start_point[1]
+        return class_header + b"...\n\n" + indent + signature
+
+    return signature
+
+
+async def _emit_body_chunks(
+    header: bytes,
+    statements: list,
+    code: bytes,
+    max_chunk_size: int,
+) -> AsyncGenerator[ChunkWithoutID, None]:
+    """
+    Greedily group consecutive `statements` into chunks so that each chunk,
+    combined with `header`, stays within max_chunk_size tokens. Every emitted
+    chunk therefore carries the full signature context (method + enclosing
+    class, via `header`) even though it only holds a slice of the body.
+
+    If a single statement doesn't fit even on its own (e.g. one huge `if`/`for`
+    block), we recurse into its own nested block using its own header line, so
+    we split further instead of dropping code. If there's nothing left to
+    recurse into, we fall back to emitting it as one oversized chunk - staying
+    under the token limit is secondary to never losing code.
+    """
+    header_tokens = await count_tokens_async(header.decode("utf-8"))
+    budget = max(max_chunk_size - header_tokens, 1)
+
+    i, n = 0, len(statements)
+    while i < n:
+        start = i
+        end = i
+        # Extend the group as far as possible while staying under budget.
+        while end + 1 < n:
+            span = code[statements[start].start_byte:statements[end + 1].end_byte]
+            if (await count_tokens_async(span.decode("utf-8"))) > budget:
+                break
+            end += 1
+
+        span = code[statements[start].start_byte:statements[end].end_byte]
+        span_tokens = await count_tokens_async(span.decode("utf-8"))
+
+        if start == end and span_tokens > budget:
+            stmt = statements[start]
+            inner_block = first_child(stmt, FUNCTION_BLOCK_NODE_TYPES)
+            inner_statements = (
+                [c for c in inner_block.children if c.is_named] if inner_block else []
+            )
+            if inner_statements:
+                # e.g. a single statement that is itself a big `if`/`for`/`try`:
+                # keep splitting, carrying the outer header plus this statement's
+                # own signature line forward as the new header.
+                nested_header = (
+                    header + b"\n" + code[stmt.start_byte:inner_block.start_byte] + b"...\n" # type: ignore
+                )
+                async for c in _emit_body_chunks(
+                    nested_header, inner_statements, code, max_chunk_size
+                ):
+                    yield c
+            else:
+                # Nothing left to split - emit as-is even if it exceeds the
+                # limit. Preserving the code takes priority over the budget.
+                combined = header + b"\n" + span
+                yield ChunkWithoutID(
+                    content=combined.decode("utf-8"),
+                    start_line=stmt.start_point[0]+1,
+                    end_line=stmt.end_point[0]+1,
+                )
+        else:
+            combined = header + b"\n" + span
+            yield ChunkWithoutID(
+                content=combined.decode("utf-8"),
+                start_line=statements[start].start_point[0]+1,
+                end_line=statements[end].end_point[0]+1,
+            )
+
+        i = end + 1
+
+
+async def split_large_function(
+    node: Node,
+    code: bytes,
+    max_chunk_size: int,
+) -> AsyncGenerator[ChunkWithoutID, None]:
+    """
+    Entry point for a function/method whose full text doesn't fit in one
+    chunk. Instead of collapsing the body away (losing the code), split the
+    body into consecutive chunks - each one prefixed with the method
+    signature and, if applicable, the enclosing class signature - so the
+    entire body is preserved across possibly-many chunks.
+    """
+    body_node = first_child(node, FUNCTION_BLOCK_NODE_TYPES)
+    statements = [c for c in body_node.children if c.is_named] if body_node else []
+
+    if not statements:
+        # No body to split (e.g. an interface/abstract stub) - best effort.
+        text = _node_text_bytes(node).decode("utf-8")
+        yield ChunkWithoutID(
+            content=text,
+            start_line=node.start_point[0]+1,
+            end_line=node.end_point[0]+1,
+        )
+        return
+
+    header = _build_function_header(node, code)
+    async for c in _emit_body_chunks(header, statements, code, max_chunk_size):
+        yield c
+
+
 collapsed_node_constructors = {
     # Classes, structs, etc
     "class_definition": construct_class_definition_chunk,
@@ -211,7 +350,7 @@ collapsed_node_constructors = {
 
 # ---------------------------------------------------------------------------
 # Chunk emission
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 async def maybe_yield_chunk(
     node: Node,
@@ -226,8 +365,8 @@ async def maybe_yield_chunk(
         if token_count < max_chunk_size:
             return ChunkWithoutID(
                 content=text.decode("utf-8"),
-                start_line=node.start_point[0],
-                end_line=node.end_point[0],
+                start_line=node.start_point[0]+1,
+                end_line=node.end_point[0]+1,
             )
     return None
 
@@ -236,22 +375,31 @@ async def get_smart_collapsed_chunks(
     node: Node,
     code: bytes,
     max_chunk_size: int,
-    root: bool = True,
+    root: bool = True
 ) -> AsyncGenerator[ChunkWithoutID, None]:
+    
+    # full content emit in chunk
     chunk = await maybe_yield_chunk(node, code, max_chunk_size, root)
     if chunk is not None:
         yield chunk
         return
 
-    # If a collapsed form is defined, use that
-    if node.type in collapsed_node_constructors:
-        content_bytes = await collapsed_node_constructors[node.type](
+    # A function/method that's too big to emit whole: split its body into
+    # multiple chunks (each headed by its signature + enclosing class
+    # signature) instead of collapsing it away, so no code is lost.
+    if node.type in FUNCTION_DECLARATION_NODE_TYPES:
+        async for c in split_large_function(node, code, max_chunk_size):
+            yield c
+
+    # Otherwise, if a collapsed form is defined (classes, structs, etc), use that
+    elif node.type in collapsed_node_constructors:
+        content_text = await collapsed_node_constructors[node.type](
             node, code, max_chunk_size
         )
         yield ChunkWithoutID(
-            content=content_bytes.decode("utf-8"),
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
+            content=content_text.decode("utf-8"),
+            start_line=node.start_point[0]+1,
+            end_line=node.end_point[0]+1,
         )
 
     # Recurse (because even if collapsed version was shown, want to show the children in full somewhere)

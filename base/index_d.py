@@ -1,16 +1,54 @@
-"""Python types from Continue core/index.d.ts, indexer-only.
-
-Dropped: Window, ILLM, chat, MCP, tools, slash commands, config, sessions, LSP.
-"""
-
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any, Literal, Optional, Protocol, Tuple, List, Dict
+from uuid import UUID
 
 
 # --- chunks ---
+@dataclass
+class Symbol:
+    id: UUID
+    type: Literal["file", "class", "method"]
+    name: str
+
+    parent_id: UUID | None
+
+    children: list[UUID] = field(default_factory=list)
+    chunk_ids: list[UUID] = field(default_factory=list)
+
+    start_line: int = 0
+    end_line: int = 0
+    
+    filepath: Optional[str] = None
+    cache_key: Optional[str] = None
+
+
+@dataclass
+class Chonk:
+    content: str
+    
+    start_line: int
+    end_line: int
+    id: Optional[UUID | None] = None
+    symbol_id: Optional[UUID | None] = None
+
+    piece_index: Optional[int | None] = None
+    piece_count: Optional[int | None] = None
+
+    prev_chunk: Optional[UUID | None] = None
+    next_chunk: Optional[UUID | None] = None
+
+    signature: Optional[str] = None
+
+
+
+@dataclass
+class ChunkingResult:
+    symbols: list[Symbol] = field(default_factory=list)
+    chunks: list[Chonk] = field(default_factory=list)
+    symbol_map: dict[UUID, Symbol] = field(default_factory=dict)
 
 @dataclass
 class ChunkWithoutID:
@@ -22,7 +60,7 @@ class ChunkWithoutID:
 
 
 @dataclass
-class Chunk(ChunkWithoutID):
+class Chunk(Chonk):
     digest: str = ""
     filepath: str = ""
     index: int = 0

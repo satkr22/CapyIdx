@@ -13,7 +13,7 @@ class SqliteDB:
     @staticmethod
     def default_path() -> Path:
         
-        return get_coreIndexer_global_path() / ".codebase_index" / "index.sqlite"
+        return get_coreIndexer_global_path() / ".codebase_index" / "index2.sqlite"
 
     @classmethod
     def initialize(cls, db_path: Optional[Path] = None) -> None:
@@ -28,6 +28,8 @@ class SqliteDB:
 
         db.execute("PRAGMA journal_mode=WAL;")
         db.execute("PRAGMA busy_timeout = 3000;")
+        db.execute("PRAGMA foreign_keys = ON")
+        
 
         db.executescript(
             """

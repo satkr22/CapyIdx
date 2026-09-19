@@ -1,8 +1,3 @@
-"""Python conversion of CodeSnippetsIndex.ts.
-
-Preserves the exact behaviour of the original TypeScript module.
-"""
-
 from __future__ import annotations
 
 import sqlite3
@@ -63,7 +58,7 @@ class ContextSubmenuItem:
 
 
 # ---------------------------------------------------------------------------
-# Snippet chunk: `ChunkWithoutID & { title, signature }` from the TS module.
+# Snippet chunk: 
 # ---------------------------------------------------------------------------
 
 
@@ -76,9 +71,7 @@ class SnippetChunk:
     end_line: int
 
 
-# Directory containing the `.scm` query files. The TypeScript module resolves
-# these relative to the tree-sitter module's `__dirname`; we mirror that by
-# resolving relative to `utils/tree_sitter.py`'s location.
+# Directory containing the `.scm` query files.
 _QUERY_BASE_DIR: Path = (
     Path(_utils_tree_sitter.__file__).resolve().parent
     / "tree_sitter_queries"
@@ -121,7 +114,7 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tag TEXT NOT NULL,
                 snippetId INTEGER NOT NULL,
-                FOREIGN KEY (snippetId) REFERENCES code_snippets (id)
+                FOREIGN KEY (snippetId) REFERENCES code_snippets (id) ON DELETE CASCADE
             )
             """
         )
@@ -224,12 +217,12 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         return capture[1] if isinstance(capture, tuple) else capture.node
 
     @staticmethod
-    def _get_snippets_from_match(match: Tuple[int, Dict[str, List[Node]]]) -> SnippetChunk:
+    def _get_snippets_from_match(
+        match: Tuple[int, Dict[str, List[Node]]]
+    ) -> Optional[SnippetChunk]:
         """
-        Convert a single tree-sitter match into a SnippetChunk.
-        
-        `match` is the structure returned by QueryCursor.matches():
-            (pattern_index, {capture_name: [Node, ...]})
+        Convert a tree-sitter match into a SnippetChunk.
+        Returns None for reference/call matches or low-quality snippets.
         """
         pattern_index, captures = match
 
@@ -239,7 +232,8 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
             "type_spec",              # Go
         }
 
-        body_capture_group_prefixes = {"definition", "reference"}
+        # Only treat real definitions as the body
+        body_capture_group_prefixes = {"definition"}
 
         title = ""
         content = ""
@@ -247,48 +241,65 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         start_line = 0
         end_line = 0
         has_seen_body = False
+        is_reference = False
 
-        # Flatten the captures dict into an ordered list of (name, node)
-        # so the original left-to-right processing order is preserved.
+        # Flatten captures while preserving order
         ordered_captures: List[Tuple[str, Node]] = []
         for name, nodes in captures.items():
             for node in nodes:
                 ordered_captures.append((name, node))
 
         for name, node in ordered_captures:
-            # "definition.function" → "definition"
-            trimmed_capture_name = name.split(".", 1)[0]
+            trimmed = name.split(".", 1)[0]
 
-            # node.text is bytes in py-tree-sitter
             node_text = node.text.decode("utf-8") if node.text else ""
             node_type = node.type
 
-            if trimmed_capture_name in body_capture_group_prefixes:
+            # Detect reference captures early
+            if trimmed == "reference":
+                is_reference = True
+                continue                      # ignore reference bodies
+
+            if trimmed in body_capture_group_prefixes:
                 if node_type in body_types_to_treat_as_signatures:
-                    # Override whatever was there before
                     signature = node_text
                     has_seen_body = True
 
                 content = node_text
-                start_line = node.start_point[0]   # row
-                end_line = node.end_point[0]       # row
+                start_line = node.start_point[0]+1
+                end_line = node.end_point[0]+1
+                has_seen_body = True
             else:
-                if trimmed_capture_name == "name":
+                if trimmed == "name":
                     title = node_text
 
                 if not has_seen_body:
                     signature += node_text + " "
-
-                    if trimmed_capture_name == "comment":
+                    if trimmed == "comment":
                         signature += "\n"
+
+        # ---------- filtering ----------
+        if is_reference:
+            return None
+
+        content = content.strip()
+        title = title.strip()
+        signature = signature.strip()
+
+        # Drop empty or tiny snippets
+        if not content or not title:
+            return None
+        if len(content) < 10:                 # adjust threshold if needed
+            return None
 
         return SnippetChunk(
             title=title,
             content=content,
-            signature=signature.strip(),
+            signature=signature,
             start_line=start_line,
             end_line=end_line,
         )
+    
 
     # ------------------------------------------------------------------
     # File → snippets
@@ -321,7 +332,15 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         cursor = QueryCursor(query)
         matches = cursor.matches(tree.root_node)
 
-        return [self._get_snippets_from_match(m) for m in matches]
+    
+        snippets = []
+        for m in matches:
+            snippet = self._get_snippets_from_match(m)
+            if snippet is not None:
+                snippets.append(snippet)
+
+        return snippets
+        # return [self._get_snippets_from_match(m) for m in matches]
     
 
     # ------------------------------------------------------------------
@@ -355,11 +374,15 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
 
             # Add snippets to sqlite
             for snippet in snippets:
-                cursor = db.execute(
-                    "REPLACE INTO code_snippets "
-                    "(path, cacheKey, content, title, signature, "
-                    " startLine, endLine) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                # 1) ensure the snippet row exists
+                db.execute(
+                    """
+                    INSERT INTO code_snippets
+                        (path, cacheKey, content, title, signature, startLine, endLine)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (path, cacheKey, content, title, startLine, endLine)
+                    DO UPDATE SET signature = excluded.signature
+                    """,
                     (
                         compute.path,
                         compute.cache_key,
@@ -370,16 +393,36 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                         snippet.end_line,
                     ),
                 )
-                last_id = cursor.lastrowid
 
+                # 2) look up its id (works whether the upsert inserted or updated)
+                row = db.execute(
+                    """
+                    SELECT id FROM code_snippets
+                    WHERE path = ? AND cacheKey = ? AND content = ? AND title = ?
+                    AND startLine = ? AND endLine = ?
+                    """,
+                    (
+                        compute.path,
+                        compute.cache_key,
+                        snippet.content,
+                        snippet.title,
+                        snippet.start_line,
+                        snippet.end_line,
+                    ),
+                ).fetchone()
+                snippet_id = row["id"]
+
+                # 3) upsert the tag link
                 db.execute(
-                    "REPLACE INTO code_snippets_tags (snippetId, tag) "
-                    "VALUES (?, ?)",
-                    (last_id, tag_string),
+                    """
+                    INSERT INTO code_snippets_tags (snippetId, tag)
+                    VALUES (?, ?)
+                    ON CONFLICT (snippetId, tag) DO NOTHING
+                    """,
+                    (snippet_id, tag_string),
                 )
-                
             db.commit()
-
+            
             yield IndexingProgressUpdate(
                 desc=f"Indexing {get_uri_path_basename(compute.path)}",
                 progress=i / compute_count if compute_count else 0.0,
@@ -422,11 +465,15 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 pass
 
             for snippet in snippets:
-                cursor = db.execute(
-                    "REPLACE INTO code_snippets "
-                    "(path, cacheKey, content, title, signature, "
-                    " startLine, endLine) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                # 1) ensure the snippet row exists
+                db.execute(
+                    """
+                    INSERT INTO code_snippets
+                        (path, cacheKey, content, title, signature, startLine, endLine)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (path, cacheKey, content, title, startLine, endLine)
+                    DO UPDATE SET signature = excluded.signature
+                    """,
                     (
                         add_tag.path,
                         add_tag.cache_key,
@@ -437,13 +484,35 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                         snippet.end_line,
                     ),
                 )
-                last_id = cursor.lastrowid
 
+                # 2) look up its id (works whether the upsert inserted or updated)
+                row = db.execute(
+                    """
+                    SELECT id FROM code_snippets
+                    WHERE path = ? AND cacheKey = ? AND content = ? AND title = ?
+                    AND startLine = ? AND endLine = ?
+                    """,
+                    (
+                        add_tag.path,
+                        add_tag.cache_key,
+                        snippet.content,
+                        snippet.title,
+                        snippet.start_line,
+                        snippet.end_line,
+                    ),
+                ).fetchone()
+                snippet_id = row["id"]
+
+                # 3) upsert the tag link
                 db.execute(
-                    "REPLACE INTO code_snippets_tags (snippetId, tag) "
-                    "VALUES (?, ?)",
-                    (last_id, tag_string),
+                    """
+                    INSERT INTO code_snippets_tags (snippetId, tag)
+                    VALUES (?, ?)
+                    ON CONFLICT (snippetId, tag) DO NOTHING
+                    """,
+                    (snippet_id, tag_string),
                 )
+            
             db.commit()
 
             await mark_complete([add_tag], IndexResultType.ADD_TAG)
