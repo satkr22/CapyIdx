@@ -1,19 +1,5 @@
 """
-Core codebase indexer orchestrator (generic Python package).
-
-Ported from Continue's CodebaseIndexerer.ts — only the indexing control flow.
-No Continue config, IDE messenger, ContinueServerClient, or embed-model
-selection. Callers inject a FileSystem and either concrete CodebaseIndexer
-instances or a set of ContextIndexingType values (factories are stubs until
-the individual backends are ported).
-
-Depends on the already-ported modules:
-  - index_d          (types, FileSystem protocol, ContextIndexingType)
-  - index_types      (CodebaseIndexer protocol, RefreshIndexResults, …)
-  - refresh_index    (get_compute_delete_add_remove, IndexLock)
-  - walk_dir         (walk_dir_async, WalkerOptions)
-  - disk_operations  (DiskOperations – typical FileSystem impl)
-  - db               (SqliteDB – initialised by the caller before use)
+Core codebase indexer orchestrator.
 """
 
 from __future__ import annotations
@@ -50,9 +36,6 @@ from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
 from watcher.file_watcher import FileWatcher, AutoFileWatcher
 from utils.uri import get_uri_path_basename, get_uri_to_path
-
-# from dataclasses import dataclass
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -155,7 +138,7 @@ def _find_uri_in_dirs(file_uri: str, workspace_dirs: Sequence[str]) -> Optional[
 
 class CodeIndexer:
     """
-    Generic codebase indexing orchestrator.
+    codebase indexing orchestrator.
 
     Parameters
     ----------
@@ -288,74 +271,6 @@ class CodeIndexer:
             return list(self._built_indexes)
         
         return []
-
-        # if not self._index_types:
-        #     return []
-
-        # factories: dict[ContextIndexingType, Callable[[], object]] = {
-        #     "chunk": self._make_chunk_index,
-        #     "code_snippets": self._make_snippets_index,
-        #     "full_text_search": self._make_fts_index,
-        #     "embeddings": self._make_embeddings_index,
-        # }
-
-        # indexes: List[CodebaseIndexer] = []
-        # # Sequential – avoids concurrent SQLite setup races once backends exist.
-        # for index_type in self._index_types:
-        #     factory = factories.get(index_type)
-        #     if factory is None:
-        #         continue
-        #     index = await factory()  # type: ignore[misc]
-        #     if index is not None:
-        #         indexes.append(index)
-
-        # self._built_indexes = indexes
-        # return list(indexes)
-
-    # def set_indexes(self, indexes: List[CodebaseIndexer]) -> None:
-    #     """Replace the active index list (e.g. after backends are ready)."""
-    #     self._built_indexes = list(indexes)
-
-    # def set_index_types(self, types: Set[ContextIndexingType]) -> None:
-    #     """
-    #     Change the requested types and clear the built cache so the next
-    #     get_indexes_to_build() rebuilds.
-    #     """
-    #     self._index_types = set(types)
-    #     self._built_indexes = []
-
-
-
-
-    # # --- factory stubs (fill in when porting each backend) ---------------
-
-    # async def _make_chunk_index(self) -> Optional[CodebaseIndexer]:
-    #     """
-    #     TODO: port ChunkCodebaseIndexer from Continue.
-    #     Needs: read_file callable, max embedding chunk size (optional).
-    #     """
-    #     return None
-
-    # async def _make_snippets_index(self) -> Optional[CodebaseIndexer]:
-    #     """
-    #     TODO: port CodeSnippetsCodebaseIndexer from Continue.
-    #     Needs: FileSystem (or IDE-like) for reading / AST if required.
-    #     """
-    #     return None
-
-    # async def _make_fts_index(self) -> Optional[CodebaseIndexer]:
-    #     """
-    #     TODO: port FullTextSearchCodebaseIndexer from Continue.
-    #     Pure SQLite FTS; no external model required.
-    #     """
-    #     return None
-
-    # async def _make_embeddings_index(self) -> Optional[CodebaseIndexer]:
-    #     """
-    #     TODO: port LanceDbIndex (or equivalent vector index) from Continue.
-    #     Needs: embeddings provider + read_file callable.
-    #     """
-    #     return None
 
     # ------------------------------------------------------------------
     # Friendly names for progress / warnings

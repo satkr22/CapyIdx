@@ -118,6 +118,20 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
             )
             """
         )
+        
+        db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_code_snippets_unique
+            ON code_snippets (path, cacheKey, content, title, startLine, endLine)
+            """
+        )
+        db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_snippetId_tag
+            ON code_snippets_tags (snippetId, tag)
+            """
+        )
+
         db.commit()
 
         # --- migration: add_signature_column ---------------------------
@@ -134,7 +148,6 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
 
         # --- migration: delete_duplicate_code_snippets -----------------
         async def _delete_duplicate_code_snippets() -> None:
-            # Delete duplicate entries in code_snippets
             db.execute(
                 """
                 DELETE FROM code_snippets
@@ -145,17 +158,6 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 )
                 """
             )
-
-            # Add unique constraint if it doesn't exist
-            db.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_code_snippets_unique
-                ON code_snippets (path, cacheKey, content, title, startLine, endLine)
-                """
-            )
-
-            # Delete code_snippets associated with duplicate
-            # code_snippets_tags entries
             db.execute(
                 """
                 DELETE FROM code_snippets
@@ -171,8 +173,6 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 )
                 """
             )
-
-            # Delete duplicate entries
             db.execute(
                 """
                 DELETE FROM code_snippets_tags
@@ -183,15 +183,6 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 )
                 """
             )
-
-            # Add unique constraint if it doesn't exist
-            db.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_snippetId_tag
-                ON code_snippets_tags (snippetId, tag)
-                """
-            )
-
             db.commit()
 
         await migrate(
