@@ -13,9 +13,6 @@ import sqlite3
 import sys
 from pathlib import Path
 
-# Add project root to sys.path so `retrieval`, `fts`, `lance_db` etc. resolve
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from base.db import SqliteDB
 from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
 from lance_db.lanceDbIndex import LanceDbIndex

@@ -3,6 +3,7 @@ import subprocess
 import os
 
 from base.index_d import BranchAndDir, Chunk
+from utils.parameters import RETRIEVAL_PARAMS, RERANK_DEFAULTS
 
 T = TypeVar("T")
 
@@ -44,3 +45,10 @@ def get_current_tags(directories: List[str]) -> List[BranchAndDir]:
         tags.append(BranchAndDir(branch=branch, directory=directory))
         
     return tags
+
+
+def rparam(name: str):
+    try:
+        return RETRIEVAL_PARAMS[name]
+    except (KeyError, TypeError):
+        return RERANK_DEFAULTS[name]

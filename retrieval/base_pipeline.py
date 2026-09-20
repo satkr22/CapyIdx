@@ -1,7 +1,7 @@
 # retrieval/base_pipeline.py
 from abc import ABC
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 import os
 import re
 import sqlite3
@@ -12,30 +12,25 @@ from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
 from lance_db.lanceDbIndex import LanceDbIndex
 from retrieval.models import Candidate, ContextItem
 from embeddings.base import Embeddings
-from utils.parameters import RETRIEVAL_PARAMS
+from retrieval.rerankers import BaseReranker
 
-# --------------------------------------------------------------------------
+from utils.parameters import DEFAULTS, RERANK_DEFAULTS, RETRIEVAL_PARAMS
 # Tunables. Any of these can be overridden by adding the key to RETRIEVAL_PARAMS.
-# --------------------------------------------------------------------------
-_DEFAULTS = {
-    "rrfK": 60,                # RRF smoothing constant
-    "vecGap": 0.20,            # drop vector-only hits this far below the best cosine sim
-    "ftsKeep": 5,              # always keep the top-N BM25 hits regardless of vector score
-    "anchorCount": 5,          # only expand context around the top-N ranked candidates
-    "symbolAnchorLimit": 25,   # max chunks returned by symbol-name lookup
-    "maxSiblingPieces": 6,     # max pieces pulled in per expanded symbol
-    "siblingDiscount": 0.8,    # score multiplier for sibling pieces of an anchor
-    "parentDiscount": 0.6,     # score multiplier for the parent's header chunk
-    "pathPenalty": 0.5,        # score multiplier for tests/docs/readme paths
-    "maxContainerLines": 150,  # nested-range dedupe: keep container only if <= this
-}
 
 
 def _param(name: str):
     try:
         return RETRIEVAL_PARAMS[name]
     except (KeyError, TypeError):
-        return _DEFAULTS[name]
+        return DEFAULTS[name]
+    
+def _rparam(name: str):
+    try:
+        return RETRIEVAL_PARAMS[name]
+    except (KeyError, TypeError):
+        return RERANK_DEFAULTS[name]
+    
+
 
 
 # Anchor tags written into Candidate.sources -> anchor strength
@@ -95,12 +90,16 @@ class BaseRetrievalPipeline(ABC):
         lance_index: LanceDbIndex,
         embeddings_provider: Embeddings,
         root_directory: List[str],
+        reranker: Optional[BaseReranker] = None,
+        rerank_weight: Optional[float] = None,
     ):
         self.db = db  # expects db.row_factory = sqlite3.Row
         self.fts_index = fts_index
         self.lance_index = lance_index
         self.embeddings_provider = embeddings_provider
         self.root_directory = root_directory
+        self.reranker = reranker
+        self.rerank_weight = rerank_weight if rerank_weight is not None else _rparam("rerankWeight")
 
     # ------------------------------------------------------------------
     # Stage 1+2: candidates (FTS + vector + symbol-name anchors), deduped
