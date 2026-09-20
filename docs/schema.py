@@ -13,9 +13,9 @@ db.row_factory = sqlite3.Row
 # db.execute("PRAGMA schema_version")
 
 
-# db.execute("SELECT name AS table_name, sql AS schema FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-# for row in db.fetchall():
-#     print(row["table_name"], ":", row["schema"])
+db.execute("SELECT name AS table_name, sql AS schema FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+for row in db.fetchall():
+    print(row["table_name"], ":", row["schema"])
     
     
     
@@ -49,9 +49,9 @@ db.row_factory = sqlite3.Row
 
 
 # db.execute("select * from symbols")
-db.execute("select * from code_snippets")
+# db.execute("select * from code_snippets")
 
-for row in db.fetchall():
-    for col in row:
-        print(col)
-    print("\n")
+# for row in db.fetchall():
+#     for col in row:
+#         print(col)
+#     print("\n")
