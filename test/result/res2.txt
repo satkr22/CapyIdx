@@ -1,0 +1,166 @@
+[1/6] Opening SQLite DB at /home/usatkr/.coreIndexer/.codebase_index/index.sqlite ...
+  Tables found: ['chunk_tags', 'chunks', 'code_snippets', 'code_snippets_tags', 'fts', 'fts_config', 'fts_content', 'fts_data', 'fts_docsize', 'fts_idx', 'fts_metadata', 'global_cache', 'indexing_lock', 'lance_db_cache', 'sqlite_sequence', 'symbols', 'tag_catalog']
+[2/6] Initializing embeddings provider ...
+  Embedding model: sentence-transformers::jinaai/jina-embeddings-v2-base-code
+[3/6] Initializing FullTextSearchCodebaseIndex ...
+[4/6] Initializing LanceDbIndex ...
+[5/6] Building NoRerankerRetrievalPipeline ...
+[6/6] Running retrieval for: 'how is retrieval working ??'
+
+  Tags: [BranchAndDir(directory='file:///home/usatkr/u_ml/projects/CoreIndexer', branch='retrival')]
+
+======================================================================
+STAGE 1+2: candidates (FTS + vector + symbol anchors)
+======================================================================
+  Identifiers in query: []
+  FTS query: "retrieval"
+  Total unique candidates: 50
+  By source: {'vector+fts': 2, 'vector': 48}
+  Anchors: 0
+
+  Top 5 by vector score (higher is better):
+    afef8b7f  sim=0.3431  src=['vector', 'fts']
+    886f7f2f  sim=0.2993  src=['vector']
+    b25e616f  sim=0.1618  src=['vector', 'fts']
+    87391e5a  sim=0.1591  src=['vector']
+    add0360c  sim=0.1489  src=['vector']
+
+  Top 5 by bm25 (lower is better):
+    afef8b7f  bm25=-2.5853  src=['vector', 'fts']
+    b25e616f  bm25=-2.5536  src=['vector', 'fts']
+
+======================================================================
+STAGE 2b: prune + fuse + path penalty
+======================================================================
+  Before prune: 50  After prune: 50
+    afef8b7f  score=0.0279  src=['vector', 'fts']
+    b25e616f  score=0.0272  src=['vector', 'fts']
+    886f7f2f  score=0.0161  src=['vector']
+    87391e5a  score=0.0156  src=['vector']
+    add0360c  score=0.0154  src=['vector']
+    9c013f14  score=0.0149  src=['vector']
+    d7cf6ee3  score=0.0147  src=['vector']
+    13823b9b  score=0.0145  src=['vector']
+    ddead7ef  score=0.0143  src=['vector']
+    e5980c86  score=0.0141  src=['vector']
+
+======================================================================
+STAGE 3: symbol expansion (top anchors only)
+======================================================================
+  Ranked: 10  Context chunks added: 2
+
+======================================================================
+STAGES 4-7: full pipeline.retrieve()
+======================================================================
+
+######################################################################
+# RRF — 8 ContextItems
+######################################################################
+
+--- [1] score=0.0279 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/retrieval.py:5-11
+  symbol:  method retrieve
+  sources: ['fts', 'vector']
+  content: async def retrieve(query: str, db_conn, lance_db, reranker_client=None, top_k=15, include_recent=False): ⏎     if reranker_client: ⏎         pipeline = RerankerRetrievalPipeline(db_conn, lance_db, reranke...
+
+--- [2] score=0.0272 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/no_rerank_pipeline.py:11-72
+  symbol:  class NoRerankerRetrievalPipeline
+  sources: ['fts', 'vector']
+  content: class NoRerankerRetrievalPipeline(BaseRetrievalPipeline): ⏎  ⏎     async def retrieve( ⏎         self, ⏎         query: str, ⏎         tags: list[BranchAndDir] | None = None, ⏎         top_k: int = RETRIEVAL_PARA...
+
+--- [3] score=0.0161 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py:418-448
+  symbol:  method _retrieve_for_tag
+  sources: ['vector']
+  content: async def _retrieve_for_tag( ⏎         self, ⏎         tag: IndexTag, ⏎         n: int, ⏎         directory: Optional[str], ⏎         vector: List[float], ⏎         db: Any, ⏎     ) -> List[dict]: ⏎         # print(t...
+
+--- [4] score=0.0156 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/index_types.py:43-47
+  symbol:  class RefreshIndexResults
+  sources: ['vector']
+  content: class RefreshIndexResults: ⏎     compute: list[PathAndCacheKey] = field(default_factory=list) ⏎     delete: list[PathAndCacheKey] = field(default_factory=list)       ⏎     add_tag: list[PathAndCacheKey] = f...
+
+--- [5] score=0.0154 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:265-276
+  symbol:  method _build_retrieve_query
+  sources: ['vector']
+  content: def _build_retrieve_query(self, config: RetrieveConfig) -> str: ⏎         return f""" ⏎             SELECT fts_metadata.chunkId, fts_metadata.path, fts.content, rank ⏎             FROM fts ⏎             JOIN ...
+
+--- [6] score=0.0149 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:190-246
+  symbol:  method retrieve
+  sources: ['vector']
+  content: async def retrieve(self, config: RetrieveConfig) -> list[tuple[Chunk, float, str]]: ⏎         query = self._build_retrieve_query(config) ⏎         parameters = self._get_retrieve_query_parameters(config) ⏎ ...
+
+--- [7] score=0.0147 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py:450-550
+  symbol:  method retrieve
+  sources: ['vector']
+  content: class LanceDbIndex(CodebaseIndexer): ⏎     ... ⏎  ⏎     async def retrieve( ⏎         self, ⏎         query: str, ⏎         n: int, ⏎         tags: List[BranchAndDir], ⏎         filter_directory: Optional[str], ⏎     )...
+
+--- [8] score=0.0143 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py:108-161
+  symbol:  method _fetch_candidates
+  sources: ['vector']
+  content: async def _fetch_candidates( ⏎         self, ⏎         query: str, ⏎         tags: List[BranchAndDir], ⏎         n: int = RETRIEVAL_PARAMS["nRetrieve"], ⏎     ) -> List[Candidate]: ⏎         if not tags: ⏎         ...
+
+
+######################################################################
+# WEIGHTED — 9 ContextItems
+######################################################################
+
+--- [1] score=0.7230 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/retrieval.py:5-11
+  symbol:  method retrieve
+  sources: ['fts', 'vector']
+  content: async def retrieve(query: str, db_conn, lance_db, reranker_client=None, top_k=15, include_recent=False): ⏎     if reranker_client: ⏎         pipeline = RerankerRetrievalPipeline(db_conn, lance_db, reranke...
+
+--- [2] score=0.1500 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/no_rerank_pipeline.py:11-72
+  symbol:  class NoRerankerRetrievalPipeline
+  sources: ['fts', 'vector']
+  content: class NoRerankerRetrievalPipeline(BaseRetrievalPipeline): ⏎  ⏎     async def retrieve( ⏎         self, ⏎         query: str, ⏎         tags: list[BranchAndDir] | None = None, ⏎         top_k: int = RETRIEVAL_PARA...
+
+--- [3] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py:418-448
+  symbol:  method _retrieve_for_tag
+  sources: ['vector']
+  content: async def _retrieve_for_tag( ⏎         self, ⏎         tag: IndexTag, ⏎         n: int, ⏎         directory: Optional[str], ⏎         vector: List[float], ⏎         db: Any, ⏎     ) -> List[dict]: ⏎         # print(t...
+
+--- [4] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/index_types.py:43-47
+  symbol:  class RefreshIndexResults
+  sources: ['vector']
+  content: class RefreshIndexResults: ⏎     compute: list[PathAndCacheKey] = field(default_factory=list) ⏎     delete: list[PathAndCacheKey] = field(default_factory=list)       ⏎     add_tag: list[PathAndCacheKey] = f...
+
+--- [5] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:265-276
+  symbol:  method _build_retrieve_query
+  sources: ['vector']
+  content: def _build_retrieve_query(self, config: RetrieveConfig) -> str: ⏎         return f""" ⏎             SELECT fts_metadata.chunkId, fts_metadata.path, fts.content, rank ⏎             FROM fts ⏎             JOIN ...
+
+--- [6] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/test3.py:48-115
+  symbol:  method main
+  sources: ['vector']
+  content: async def main(): ⏎     # ---- 1. Open SQLite connection ---- ⏎      ⏎ pipeline = NoRerankerRetrievalPipeline( ⏎         db=db, ⏎         fts_index=fts_index, ⏎         lance_index=lancedb_index, ⏎         embeddin...
+
+--- [7] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:190-246
+  symbol:  method retrieve
+  sources: ['vector']
+  content: async def retrieve(self, config: RetrieveConfig) -> list[tuple[Chunk, float, str]]: ⏎         query = self._build_retrieve_query(config) ⏎         parameters = self._get_retrieve_query_parameters(config) ⏎ ...
+
+--- [8] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py:450-550
+  symbol:  method retrieve
+  sources: ['vector']
+  content: class LanceDbIndex(CodebaseIndexer): ⏎     ... ⏎  ⏎     async def retrieve( ⏎         self, ⏎         query: str, ⏎         n: int, ⏎         tags: List[BranchAndDir], ⏎         filter_directory: Optional[str], ⏎     )...
+
+--- [9] score=0.0000 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py:108-161
+  symbol:  method _fetch_candidates
+  sources: ['vector']
+  content: async def _fetch_candidates( ⏎         self, ⏎         query: str, ⏎         tags: List[BranchAndDir], ⏎         n: int = RETRIEVAL_PARAMS["nRetrieve"], ⏎     ) -> List[Candidate]: ⏎         if not tags: ⏎         ...
+

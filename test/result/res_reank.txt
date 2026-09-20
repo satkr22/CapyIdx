@@ -1,0 +1,250 @@
+[1/7] Opening SQLite DB at /home/usatkr/.coreIndexer/.codebase_index/index.sqlite ...
+  Tables found: ['chunk_tags', 'chunks', 'code_snippets', 'code_snippets_tags', 'fts', 'fts_config', 'fts_content', 'fts_data', 'fts_docsize', 'fts_idx', 'fts_metadata', 'global_cache', 'indexing_lock', 'lance_db_cache', 'sqlite_sequence', 'symbols', 'tag_catalog']
+[2/7] Initializing embeddings provider ...
+  Embedding model: sentence-transformers::jinaai/jina-embeddings-v2-base-code
+[3/7] Initializing FullTextSearchCodebaseIndex ...
+[4/7] Initializing LanceDbIndex ...
+[5/7] Building NoRerankerRetrievalPipeline and RerankerRetrievalPipeline
+[6/7] Initializing Reranker provider ...
+  Reranker model: sentence-transformers::jinaai/jina-reranker-v2-base-multilingual
+[7/7] Running 7 queries ...
+
+  Tags: [BranchAndDir(directory='file:///home/usatkr/u_ml/projects/CoreIndexer', branch='retrival')]
+
+==============================================================================
+[res1] Explain how chunkCodebaseIndex work?
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +1    0.0599   fts,symbol_child,vector      …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  1     -1    0.0574   fts,symbol_match,vector      …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  2     NEW   0.0505   vector                       /home/usatkr/u_ml/projects/CoreIndexer/test2.py
+  3     +6    0.0400   fts,vector                   …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  4     NEW   0.0388   fts                          …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  5     NEW   0.0388   vector                       /home/usatkr/u_ml/projects/CoreIndexer/test.py
+  6     +4    0.0357   fts,vector                   …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  7     +4    0.0321   vector                       …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  8     NEW   0.0195   vector                       …u_ml/projects/CoreIndexer/codesnippet/codeSnippetsIndex.py
+  9     -3    0.0149   symbol_child                 …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  10    -5    0.0145   fts,symbol_child             …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  11    -3    0.0138   symbol_child                 …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  12    -8    0.0137   fts,symbol_child             …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0505  main
+      0.0388  _convert_tags
+      0.0388  main
+      0.0195  update
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0427  _insert_or_raise
+      0.0421  __init__
+      0.0290  insert_symbols
+      0.0154  FullTextSearchCodebaseIndex
+      0.0152  Chunk
+
+  ✓ target 'ChunkCodebaseIndex':  RRF=#0  RR+rerank=#1
+
+==============================================================================
+[res2] how is retrieval working ??
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +5    0.0164   vector                       …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  1     +7    0.0164   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  2     NEW   0.0153   vector                       …tkr/u_ml/projects/CoreIndexer/retrieval/rerank_pipeline.py
+  3     -1    0.0144   vector                       …/u_ml/projects/CoreIndexer/retrieval/no_rerank_pipeline.py
+  4     NEW   0.0133   vector                       /home/usatkr/u_ml/projects/CoreIndexer/retrieval/utils.py
+  5     -5    0.0132   vector                       …me/usatkr/u_ml/projects/CoreIndexer/retrieval/retrieval.py
+  6     NEW   0.0132   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  7     NEW   0.0129   vector                       …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  8     -7    0.0128   vector                       …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  9     NEW   0.0128   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0153  retrieve
+      0.0133  rparam
+      0.0132  _param
+      0.0129  retrieve
+      0.0128  _rparam
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0156  RefreshIndexResults
+      0.0154  _build_retrieve_query
+      0.0147  retrieve
+      0.0145  _chunk_content
+      0.0137  _expand_via_symbols
+      0.0128  ContextItem
+
+  ✓ target 'BaseRetrievalPipeline':  RRF=#miss  RR+rerank=#miss
+
+==============================================================================
+[res3] how are chunks stored in sqlite
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +1    0.0238   fts,vector                   …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  1     +9    0.0238   fts,vector                   …tkr/u_ml/projects/CoreIndexer/retrieval/rerank_pipeline.py
+  2     -2    0.0178   fts,symbol_expansion,vector  …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  3     NEW   0.0173   vector                       …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  4     NEW   0.0166   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test4.py
+  5     NEW   0.0164   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test3.py
+  6     NEW   0.0158   vector                       /home/usatkr/u_ml/projects/CoreIndexer/test.py
+  7     -2    0.0155   fts,vector                   …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  8     -4    0.0149   fts,vector                   …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  9     -7    0.0148   fts,vector                   …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  10    NEW   0.0148   vector                       /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md
+  11    NEW   0.0141   vector                       …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0173  insert_chunks
+      0.0166  main
+      0.0164  main
+      0.0158  main
+      0.0148  /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md
+      0.0141  get_existing_chunks
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0222  ItemWithChunks
+      0.0215  create_lance_db_rows
+      0.0212  pack_to_chunks
+      0.0210  get_chunks
+      0.0209  delete_file_chunks_and_symbols
+      0.0154  Chunk
+
+  ✓ target 'insert_chunks':  RRF=#miss  RR+rerank=#3
+
+==============================================================================
+[res4] where does the FTS index get updated
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +3    0.0260   fts,vector                   …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  1     +9    0.0237   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/test2.py
+  2     NEW   0.0186   fts                          …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  3     +5    0.0181   fts,symbol_expansion,vector  /home/usatkr/u_ml/projects/CoreIndexer/test4.py
+  4     +3    0.0177   fts,vector                   …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  5     NEW   0.0175   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test3.py
+  6     -1    0.0170   fts,vector                   …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  7     -1    0.0132   fts,vector                   …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+  8     NEW   0.0124   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test3.py
+  9     NEW   0.0122   fts                          …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  10    -1    0.0100   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md
+  11    NEW   0.0100   fts                          …ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0186  _fetch_candidates
+      0.0175  main
+      0.0124  _run_with_debug
+      0.0122  _prune_candidates
+      0.0100  _build_path_filter
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0260  refresh_file
+      0.0252  IndexResultType
+      0.0252  get_add_remove_for_tag
+      0.0248  _single_file_index_ops
+      0.0109  AddRemoveResultType
+
+  ✓ target 'FullTextSearchCodebaseIndex.update':  RRF=#miss  RR+rerank=#miss
+
+==============================================================================
+[res5] how does hybrid scoring work
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +6    0.0164   vector                       …tkr/u_ml/projects/CoreIndexer/retrieval/rerank_pipeline.py
+  1     NEW   0.0131   fts                          /home/usatkr/u_ml/projects/CoreIndexer/retrieval/models.py
+  2     +9    0.0116   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  3     -1    0.0115   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  4     NEW   0.0114   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  5     NEW   0.0113   vector                       …me/usatkr/u_ml/projects/CoreIndexer/retrieval/rerankers.py
+  6     NEW   0.0112   vector                       …satkr/u_ml/projects/CoreIndexer/retrieval/base_pipeline.py
+  7     NEW   0.0111   vector                       …tkr/u_ml/projects/CoreIndexer/retrieval/rerank_pipeline.py
+  8     NEW   0.0111   vector                       …me/usatkr/u_ml/projects/CoreIndexer/retrieval/rerankers.py
+  9     NEW   0.0110   vector                       …/u_ml/projects/CoreIndexer/retrieval/no_rerank_pipeline.py
+  10    NEW   0.0108   vector                       …me/usatkr/u_ml/projects/CoreIndexer/retrieval/rerankers.py
+  11    -8    0.0106   vector                       …me/usatkr/u_ml/projects/CoreIndexer/retrieval/rerankers.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0131  ContextItem
+      0.0114  _fetch_candidates
+      0.0113  score
+      0.0112  _prune_candidates
+      0.0111  retrieve
+      0.0111  _parse_response
+      0.0110  retrieve
+      0.0108  _score_batch
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0164  anchor_score
+      0.0159  BaseReranker
+      0.0149  Candidate
+      0.0147  retrieve
+      0.0141  retrieve
+      0.0139  _apply_path_penalty
+      0.0137  APIReranker
+      0.0133  _expand_via_symbols
+
+  ✓ target '_fuse_weighted':  RRF=#11  RR+rerank=#2
+
+==============================================================================
+[res6] where read_file is implemented?
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     +4    0.0604   fts,symbol_expansion,vector  /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py
+  1     -1    0.0542   fts,symbol_match,vector      …/usatkr/u_ml/projects/CoreIndexer/utils/disk_operations.py
+  2     +5    0.0535   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py
+  3     +2    0.0521   fts,vector                   …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  4     +2    0.0495   fts,vector                   …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  5     +4    0.0454   fts                          /home/usatkr/u_ml/projects/CoreIndexer/walker/walk_dir.py
+  6     -3    0.0440   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/utils/tree_sitter.py
+  7     -5    0.0370   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/base/index_d.py
+  8     -7    0.0325   symbol_expansion             …/usatkr/u_ml/projects/CoreIndexer/utils/disk_operations.py
+  9     -1    0.0111   vector                       /home/usatkr/u_ml/projects/CoreIndexer/base/index_d.py
+
+==============================================================================
+[res7] where filesystem operations are implemented?
+==============================================================================
+
+  RANK  Δ     SCORE    SOURCE                       PATH
+  ----- ----- -------- ---------------------------- ----------------------------------------
+  0     =     0.0267   fts,vector                   …/usatkr/u_ml/projects/CoreIndexer/utils/disk_operations.py
+  1     NEW   0.0168   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test2.py
+  2     +6    0.0149   fts,vector                   …satkr/u_ml/projects/CoreIndexer/indexer/codeBaseIndexer.py
+  3     NEW   0.0144   fts,symbol_expansion         /home/usatkr/u_ml/projects/CoreIndexer/test.py
+  4     NEW   0.0138   fts                          /home/usatkr/u_ml/projects/CoreIndexer/utils/tree_sitter.py
+  5     NEW   0.0137   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test4.py
+  6     -2    0.0137   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/base/index_d.py
+  7     -6    0.0134   fts,vector                   …u_ml/projects/CoreIndexer/codesnippet/codeSnippetsIndex.py
+  8     NEW   0.0134   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/walker/walk_dir.py
+  9     NEW   0.0134   fts                          /home/usatkr/u_ml/projects/CoreIndexer/test3.py
+  10    -1    0.0132   fts                          …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  11    -8    0.0125   fts,vector                   …kr/u_ml/projects/CoreIndexer/chunker/chunkCodebaseIndex.py
+  12    NEW   0.0124   fts                          …/usatkr/u_ml/projects/CoreIndexer/lance_db/lanceDbIndex.py
+  13    -11   0.0103   fts,vector                   /home/usatkr/u_ml/projects/CoreIndexer/base/index_types.py
+
+  ↑ Reranker surfaced (wasn't in RRF top-k):
+      0.0168  main
+      0.0144  main
+      0.0138  get_symbols_for_many_files
+      0.0137  main
+      0.0134  DFSWalker
+      0.0134  main
+      0.0124  create
+
+  ↓ Reranker dropped (was in RRF top-k):
+      0.0233  _classify
+      0.0232  main
+      0.0231  __init__
+
+==============================================================================
+Done.
+==============================================================================

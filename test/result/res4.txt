@@ -1,0 +1,150 @@
+[1/6] Opening SQLite DB at /home/usatkr/.coreIndexer/.codebase_index/index.sqlite ...
+  Tables found: ['chunk_tags', 'chunks', 'code_snippets', 'code_snippets_tags', 'fts', 'fts_config', 'fts_content', 'fts_data', 'fts_docsize', 'fts_idx', 'fts_metadata', 'global_cache', 'indexing_lock', 'lance_db_cache', 'sqlite_sequence', 'symbols', 'tag_catalog']
+[2/6] Initializing embeddings provider ...
+  Embedding model: sentence-transformers::jinaai/jina-embeddings-v2-base-code
+[3/6] Initializing FullTextSearchCodebaseIndex ...
+[4/6] Initializing LanceDbIndex ...
+[5/6] Building NoRerankerRetrievalPipeline ...
+[6/6] Running retrieval for: 'where does the FTS index get updated'
+
+  Tags: [BranchAndDir(directory='file:///home/usatkr/u_ml/projects/CoreIndexer', branch='retrival')]
+
+======================================================================
+STAGE 1+2: candidates (FTS + vector + symbol anchors)
+======================================================================
+  Identifiers in query: []
+  FTS query: "fts" OR "index" OR "get" OR "updated"
+  Total unique candidates: 68
+  By source: {'vector+fts': 13, 'vector': 37, 'fts': 18}
+  Anchors: 0
+
+  Top 5 by vector score (higher is better):
+    ad6c7e55  sim=0.7151  src=['vector', 'fts']
+    bc32082f  sim=0.6542  src=['vector', 'fts']
+    f798065f  sim=0.5676  src=['vector', 'fts']
+    60c0e8d8  sim=0.5450  src=['vector']
+    13823b9b  sim=0.4985  src=['vector']
+
+  Top 5 by bm25 (lower is better):
+    0faaba20  bm25=-6.3913  src=['vector', 'fts']
+    b58d39b2  bm25=-5.8920  src=['vector', 'fts']
+    606b92c4  bm25=-5.6720  src=['vector', 'fts']
+    af07718a  bm25=-5.5754  src=['fts']
+    633b0bf0  bm25=-5.4187  src=['fts']
+
+======================================================================
+STAGE 2b: prune + fuse + path penalty
+======================================================================
+  Before prune: 68  After prune: 9
+    ad6c7e55  score=0.0267  src=['vector', 'fts']
+    b58d39b2  score=0.0267  src=['vector', 'fts']
+    bc32082f  score=0.0266  src=['vector', 'fts']
+    0faaba20  score=0.0264  src=['vector', 'fts']
+    606b92c4  score=0.0263  src=['vector', 'fts']
+    60c0e8d8  score=0.0156  src=['vector']
+    f798065f  score=0.0132  src=['vector', 'fts']
+    af07718a  score=0.0109  src=['fts']
+    633b0bf0  score=0.0108  src=['fts']
+
+======================================================================
+STAGE 3: symbol expansion (top anchors only)
+======================================================================
+  Ranked: 9  Context chunks added: 2
+
+======================================================================
+STAGES 4-7: full pipeline.retrieve()
+======================================================================
+
+######################################################################
+# RRF — 7 ContextItems
+######################################################################
+
+--- [1] score=0.0267 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:92-182
+  symbol:  method update
+  sources: ['fts', 'vector']
+  content: class FullTextSearchCodebaseIndex(CodebaseIndexer): ⏎     ... ⏎  ⏎     async def update( ⏎         self, ⏎         tag: IndexTag, ⏎         context: IndexContext, ⏎         results: RefreshIndexResults, ⏎         mar...
+
+--- [2] score=0.0267 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/indexer/codeBaseIndexer.py:715-780
+  symbol:  method refresh_file
+  sources: ['fts', 'vector']
+  content: async def refresh_file( ⏎         self, ⏎         file: str, ⏎         workspace_dirs: Sequence[str], ⏎         cancellation: Optional[CancellationToken] = None ⏎     ) -> None: ⏎         """ ⏎         Re-index one...
+
+--- [3] score=0.0264 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:134-299
+  symbol:  method get_add_remove_for_tag
+  sources: ['fts', 'vector', 'symbol_expansion']
+  content: async def get_add_remove_for_tag( ⏎     tag: IndexTag, ⏎     current_files: FileStatsMap, ⏎     read_file: Callable[[str], Awaitable[str]], ⏎     *, ⏎     only_paths: Optional[set[str]] = None, ⏎ ) -> tuple[ ⏎     ...
+
+--- [4] score=0.0263 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/index_types.py:24-29
+  symbol:  class IndexResultType
+  sources: ['fts', 'vector']
+  content: class IndexResultType(str, Enum): ⏎     COMPUTE = "compute" ⏎     DELETE = "delete"                   ⏎     ADD_TAG = "addTag" ⏎     REMOVE_TAG = "removeTag" ⏎     UPDATE_LAST_UPDATED = "updateLastUpdated"
+
+--- [5] score=0.0132 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md:0-51
+  symbol:  file /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md
+  sources: ['fts', 'vector']
+  content: chunk_tags : CREATE TABLE chunk_tags( ⏎                 id       INTEGER PRIMARY KEY AUTOINCREMENT, ⏎                 tag      TEXT NOT NULL, ⏎                 chunkId  TEXT NOT NULL, ⏎                 FOREIG...
+
+--- [6] score=0.0109 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:56-62
+  symbol:  class AddRemoveResultType
+  sources: ['fts']
+  content: class AddRemoveResultType(str, Enum): ⏎     ADD = "add" ⏎     REMOVE = "remove" ⏎     UPDATE_NEW_VERSION = "updateNewVersion" ⏎     UPDATE_OLD_VERSION = "updateOldVersion" ⏎     UPDATE_LAST_UPDATED = "updateLas...
+
+--- [7] score=0.0108 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:96-130
+  symbol:  method get_saved_items_for_tag
+  sources: ['fts']
+  content: def get_saved_items_for_tag( ⏎     tag: IndexTag, ⏎     only_paths: Optional[set[str]] = None, ⏎ ) -> list[tuple[str, str, int]]: ⏎     """Return (path, cache_key, last_updated) rows for a tag. ⏎      ⏎     When ...
+
+
+######################################################################
+# WEIGHTED — 7 ContextItems
+######################################################################
+
+--- [1] score=0.5276 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/indexer/codeBaseIndexer.py:715-780
+  symbol:  method refresh_file
+  sources: ['fts', 'vector']
+  content: async def refresh_file( ⏎         self, ⏎         file: str, ⏎         workspace_dirs: Sequence[str], ⏎         cancellation: Optional[CancellationToken] = None ⏎     ) -> None: ⏎         """ ⏎         Re-index one...
+
+--- [2] score=0.4891 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:134-299
+  symbol:  method get_add_remove_for_tag
+  sources: ['fts', 'vector', 'symbol_expansion']
+  content: async def get_add_remove_for_tag( ⏎     tag: IndexTag, ⏎     current_files: FileStatsMap, ⏎     read_file: Callable[[str], Awaitable[str]], ⏎     *, ⏎     only_paths: Optional[set[str]] = None, ⏎ ) -> tuple[ ⏎     ...
+
+--- [3] score=0.4648 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/fts/fullTextSearchCodebaseIndex.py:92-182
+  symbol:  method update
+  sources: ['fts', 'vector']
+  content: class FullTextSearchCodebaseIndex(CodebaseIndexer): ⏎     ... ⏎  ⏎     async def update( ⏎         self, ⏎         tag: IndexTag, ⏎         context: IndexContext, ⏎         results: RefreshIndexResults, ⏎         mar...
+
+--- [4] score=0.4385 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/index_types.py:24-29
+  symbol:  class IndexResultType
+  sources: ['fts', 'vector']
+  content: class IndexResultType(str, Enum): ⏎     COMPUTE = "compute" ⏎     DELETE = "delete"                   ⏎     ADD_TAG = "addTag" ⏎     REMOVE_TAG = "removeTag" ⏎     UPDATE_LAST_UPDATED = "updateLastUpdated"
+
+--- [5] score=0.2624 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:56-62
+  symbol:  class AddRemoveResultType
+  sources: ['fts']
+  content: class AddRemoveResultType(str, Enum): ⏎     ADD = "add" ⏎     REMOVE = "remove" ⏎     UPDATE_NEW_VERSION = "updateNewVersion" ⏎     UPDATE_OLD_VERSION = "updateOldVersion" ⏎     UPDATE_LAST_UPDATED = "updateLas...
+
+--- [6] score=0.2455 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/base/refresh_index.py:96-130
+  symbol:  method get_saved_items_for_tag
+  sources: ['fts']
+  content: def get_saved_items_for_tag( ⏎     tag: IndexTag, ⏎     only_paths: Optional[set[str]] = None, ⏎ ) -> list[tuple[str, str, int]]: ⏎     """Return (path, cache_key, last_updated) rows for a tag. ⏎      ⏎     When ...
+
+--- [7] score=0.2140 ---
+  path:    /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md:0-51
+  symbol:  file /home/usatkr/u_ml/projects/CoreIndexer/docs/tables_schema.md
+  sources: ['fts', 'vector']
+  content: chunk_tags : CREATE TABLE chunk_tags( ⏎                 id       INTEGER PRIMARY KEY AUTOINCREMENT, ⏎                 tag      TEXT NOT NULL, ⏎                 chunkId  TEXT NOT NULL, ⏎                 FOREIG...
+

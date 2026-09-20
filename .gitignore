@@ -225,7 +225,7 @@ docs/flows
 # test2.py
 # test3.py
 index.ts
-*.txt
+# *.txt
 
 # my folders
 zhelper
