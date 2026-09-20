@@ -67,8 +67,8 @@ async def main():
     # ------------------------------------------------------------------
     # Embeddings
     # ------------------------------------------------------------------
-    embeddings_provider = LocalEmbeddings()
-    # embeddings_provider = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
+    # embeddings_provider = LocalEmbeddings()
+    embeddings_provider = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
     
     
 

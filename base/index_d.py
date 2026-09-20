@@ -42,6 +42,11 @@ class Chonk:
 
     signature: Optional[str] = None
 
+@dataclass
+class Chunk(Chonk):
+    digest: str = ""
+    filepath: str = ""
+    index: int = 0
 
 
 @dataclass
@@ -59,11 +64,6 @@ class ChunkWithoutID:
     other_metadata: Optional[dict[str, Any]] = None
 
 
-@dataclass
-class Chunk(Chonk):
-    digest: str = ""
-    filepath: str = ""
-    index: int = 0
 
 
 # --- indexing progress ---

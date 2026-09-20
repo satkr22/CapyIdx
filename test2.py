@@ -18,7 +18,7 @@ async def main():
     SqliteDB.initialize()
     db = SqliteDB.get()
     fs = DiskOperations(roots=[str(WORKSPACE)])
-    emb = LocalEmbeddings()
+    emb = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
 
     chunk_index = ChunkCodebaseIndex(db=db, filesystem=fs, max_chunk_size=emb.max_embedding_chunk_size)
     fts_index = FullTextSearchCodebaseIndex(db=db)

@@ -132,6 +132,7 @@ class LanceDbIndex(CodebaseIndexer):
 
         return [
             Chunk(
+                id=row["id"],
                 content=row["content"],
                 start_line=row["startLine"],
                 end_line=row["endLine"],
@@ -168,6 +169,7 @@ class LanceDbIndex(CodebaseIndexer):
         chunk_map: Dict[str, ItemWithChunks] = {}
         for item in items:
             try:
+                # do not delete these commented line # <------ critical for later use
                 # content = await self.fs.read_file(item.path)
                 # if not should_chunk(item.path, content):
                     # continue
@@ -193,9 +195,10 @@ class LanceDbIndex(CodebaseIndexer):
             digest=item.cache_key,
         )
         async for chunk in chunk_document(chunk_params):
-            if len(chunk.content) == 0:
-                raise ValueError("did not chunk properly")
-            chunks.append(chunk)
+            if isinstance(chunk, Chunk):
+                if len(chunk.content) == 0:
+                    raise ValueError("did not chunk properly")
+                chunks.append(chunk)
         return chunks
 
     async def get_embeddings(self, chunks: List[Chunk]) -> List[List[float]]:
@@ -223,7 +226,7 @@ class LanceDbIndex(CodebaseIndexer):
                     {
                         "path": path,
                         "cachekey": item.cache_key,
-                        "uuid": str(uuid.uuid4()),
+                        "uuid": chunk.id,
                         "vector": embeddings[embedding_index],
                         "startLine": chunk.start_line,
                         "endLine": chunk.end_line,
@@ -371,6 +374,7 @@ class LanceDbIndex(CodebaseIndexer):
                 safe_cache = cache_key.replace("'", "''")
                 safe_path = path.replace("'", "''")
 
+
                 predicate = (
                     f"cachekey = '{safe_cache}' "
                     f"AND path = '{safe_path}'"
@@ -419,7 +423,7 @@ class LanceDbIndex(CodebaseIndexer):
         vector: List[float],
         db: Any,
     ) -> List[dict]:
-        
+        # print(tag.directory)
         table_name = self.table_name_for_tag(tag)
         table_names = await asyncio.to_thread(db.table_names)
         if table_name not in table_names:
@@ -449,7 +453,7 @@ class LanceDbIndex(CodebaseIndexer):
         n: int,
         tags: List[BranchAndDir],
         filter_directory: Optional[str],
-    ) -> List[Chunk]:
+    ) -> List[tuple[Chunk, float, str]]:
         lance = LanceDbIndex.lance
         if lance is None or not self.embeddings_provider:
             return []
@@ -508,7 +512,7 @@ class LanceDbIndex(CodebaseIndexer):
         
         row_map = {r["uuid"]: r for r in data}
         seen: set[str] = set()
-        out: list[Chunk] = []
+        out: list[tuple[Chunk, float, str]] = []
         
         for result in all_results:
             uid = result["uuid"]
@@ -522,16 +526,26 @@ class LanceDbIndex(CodebaseIndexer):
                 # Orphaned fts_metadata.chunkId — chunks row already deleted,
                 # or FK enforcement is off. Skip rather than crash.
                 continue
-                
+            
+            dist = float(result["_distance"])
+            # Convert L2 → cosine similarity for unit-norm vectors:
+            cos_sim = 1.0 - (dist * dist) / 2.0
+            # Clamp to [0, 1] to be safe
+            cos_sim = max(0.0, min(1.0, cos_sim))
+            
             out.append(
-                Chunk(
-                    digest=row["cacheKey"],
-                    filepath=row["path"],
-                    start_line=row["startLine"],
-                    end_line=row["endLine"],
-                    index=0,
-                    content=row["contents"],
-                )
+                (
+                    Chunk(
+                        digest=row["cacheKey"],
+                        filepath=row["path"],
+                        start_line=row["startLine"],
+                        end_line=row["endLine"],
+                        index=0,
+                        content=row["contents"],
+                    ),
+                    cos_sim, # vector score
+                    result["uuid"] # chunk_id
+                )   
             )
         return out
 

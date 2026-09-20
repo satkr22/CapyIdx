@@ -49,7 +49,7 @@ from utils.parameters import RETRIEVAL_PARAMS
 class FullTextSearchCodebaseIndex(CodebaseIndexer):
     artifact_id = "sqliteFts"
     relative_expected_time = 0.2
-    path_weight_multiplier = 10.0
+    path_weight_multiplier = 20.0
 
     def __init__(self, db: sqlite3.Connection):
         self.db = db
@@ -187,7 +187,7 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
     # Retrieve
     # ------------------------------------------------------------------ #
 
-    async def retrieve(self, config: RetrieveConfig) -> list[Chunk]:
+    async def retrieve(self, config: RetrieveConfig) -> list[tuple[Chunk, float, str]]:
         query = self._build_retrieve_query(config)
         parameters = self._get_retrieve_query_parameters(config)
 
@@ -214,7 +214,7 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
         chunk_map = {c["id"]: c for c in chunks}
         
         seen: set[int] = set()
-        out: list[Chunk] = []
+        out: list[tuple[Chunk, float, str]] = []
         
         for result in results:
             cid = result["chunkId"]
@@ -229,14 +229,18 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
                 continue
             
             out.append(
-                Chunk(
-                    filepath=row["path"],
-                    index=row["idx"],
-                    start_line=row["startLine"],
-                    end_line=row["endLine"],
-                    content=row["content"],
-                    digest=row["cacheKey"],
-                )
+                (
+                    Chunk(
+                        filepath=row["path"],
+                        index=row["idx"],
+                        start_line=row["startLine"],
+                        end_line=row["endLine"],
+                        content=row["content"],
+                        digest=row["cacheKey"],
+                    ),
+                    float(result["rank"]), # bm25 score
+                    result["chunkId"] # chunk_id
+                )   
             )
             
         return out

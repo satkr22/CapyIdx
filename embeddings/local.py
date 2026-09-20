@@ -35,7 +35,7 @@ class LocalEmbeddings(Embeddings):
         device: str | None = None,
         batch_size: int = 32,
     ) -> None:
-        self._model = SentenceTransformer(model_name, device=device)
+        self._model = SentenceTransformer(model_name, device=device, trust_remote_code=True)
         self._batch_size = batch_size
         self.embedding_id = f"sentence-transformers::{model_name}"
         self.max_embedding_chunk_size = (
