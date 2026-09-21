@@ -231,4 +231,5 @@ mcp.md
 
 # my folders
 zhelper
-test
+test/result
+test/fixtures
