@@ -46,6 +46,7 @@ class SymbolCode:
     code: str
     children: tuple["SymbolCode", ...] = ()
     pieces: tuple[str, ...] = ()
+    signature: str | None = None
 
     @property
     def reconstructed_text(self) -> str:
@@ -64,6 +65,7 @@ class SymbolCode:
             "start_line": self.start_line,
             "end_line": self.end_line,
             "code": self.code,
+            "signature": self.signature,
             "pieces": list(self.pieces),
             "children": [child.as_dict() for child in self.children],
         }
@@ -76,6 +78,7 @@ class LookupResult:
     query: str
     matches: list[SymbolMatch] = field(default_factory=list)
     selected: SymbolCode | None = None
+    limitations: tuple[str, ...] = ()
 
     @property
     def match_kind(self) -> MatchKind | None:
@@ -86,4 +89,5 @@ class LookupResult:
             "query": self.query,
             "matches": [match.as_dict() for match in self.matches],
             "selected": self.selected.as_dict() if self.selected else None,
+            "limitations": list(self.limitations),
         }

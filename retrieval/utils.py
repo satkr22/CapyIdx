@@ -38,7 +38,8 @@ def get_current_tags(directories: List[str]) -> List[BranchAndDir]:
             text=True
         ).strip()
     except subprocess.CalledProcessError:
-        branch = "main" # Fallback if not a git repo
+        # branch = "main" # Fallback if not a git repo
+        branch = "NONE" # Fallback if not a git repo
 
     tags = []
     for directory in directories:

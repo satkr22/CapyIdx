@@ -43,9 +43,9 @@ from indexer.codeBaseIndexer import CodeIndexer
 
 
 # Change this to the repository you want to index
-# WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
-WORKSPACE = Path.cwd()
+# WORKSPACE = Path.cwd()
 
 # SQLite database location
 # DB_PATH = WORKSPACE / "index.db"
@@ -68,7 +68,7 @@ async def main():
     # Embeddings
     # ------------------------------------------------------------------
     # embeddings_provider = LocalEmbeddings()
-    embeddings_provider = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
+    # embeddings_provider = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
     
     
 
@@ -79,35 +79,35 @@ async def main():
     chunk_index = ChunkCodebaseIndex(
         db=db,
         filesystem=fs,
-        max_chunk_size=embeddings_provider.max_embedding_chunk_size,
-        # max_chunk_size=512
+        # max_chunk_size=embeddings_provider.max_embedding_chunk_size,
+        max_chunk_size=512
     )
     
-    fts_index = FullTextSearchCodebaseIndex(
-        db=db
-    )
+    # fts_index = FullTextSearchCodebaseIndex(
+    #     db=db
+    # )
     
-    code_snippets_index = CodeSnippetsCodebaseIndex(
-        filesystem=fs,
-        db=db
-    )
+    # code_snippets_index = CodeSnippetsCodebaseIndex(
+    #     filesystem=fs,
+    #     db=db
+    # )
     
-    lancedb_index = await LanceDbIndex.create(
-        db=db,
-        embeddings_provider=embeddings_provider,
-        filesystem=fs
-    )
-    if lancedb_index is None:
-        raise RuntimeError("Failed to create LanceDB index")
+    # lancedb_index = await LanceDbIndex.create(
+    #     db=db,
+    #     embeddings_provider=embeddings_provider,
+    #     filesystem=fs
+    # )
+    # if lancedb_index is None:
+    #     raise RuntimeError("Failed to create LanceDB index")
     
     # main orchestrator
     indexer = CodeIndexer(
         fs=fs,
         indexes=[
             chunk_index, 
-            fts_index, 
-            code_snippets_index,
-            lancedb_index
+            # fts_index, 
+            # code_snippets_index,
+            # lancedb_index
         ],
     )
     

@@ -227,6 +227,7 @@ docs/flows
 # test3.py
 index.ts
 *.txt
+mcp.md
 
 # my folders
 zhelper

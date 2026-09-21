@@ -3,8 +3,8 @@
 The retrieval contract is deliberately small:
 
 * find rows in ``symbols`` by name;
-* use exact name matches, or case-insensitive substring matches if there are
-  no exact matches;
+* use case-sensitive exact, case-insensitive exact, then case-insensitive
+  substring matches, in that order;
 * load chunks for an explicitly selected symbol;
 * order those chunks by their piece chain and reconstruct their text;
 * recursively materialize children for file and class symbols.
@@ -14,13 +14,20 @@ The module performs only direct table lookups and deterministic assembly.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, List
+from typing import Any, Literal, Optional, Sequence, List
 
 from .models import LookupResult, SymbolCode, SymbolMatch
 from retrieval.utils import get_current_tags
+
+# test purpose
+from base.index_d import BranchAndDir
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,12 @@ class _Scope:
     tags: tuple[str, ...] = ()
     paths: tuple[str, ...] = ()
 
+_tags = [
+    BranchAndDir(
+        directory="file:///home/usatkr/u_ml/projects/continue_fork",
+        branch="NONE"
+    )
+]
 
 class SymbolLookup:
     """Lookup and reconstruct symbols from an existing SQLite connection.
@@ -40,7 +53,33 @@ class SymbolLookup:
     def __init__(self, db: sqlite3.Connection, roots:List[str]) -> None:
         self.db = db
         self.db.row_factory = sqlite3.Row
-        self.tags = get_current_tags(roots)
+        self.tags = _tags
+        # self.tags = get_current_tags(roots)
+        self._ensure_chunk_piece_index()
+
+    def _ensure_chunk_piece_index(self) -> None:
+        """Best-effort index creation for the batched chunk lookup path."""
+
+        try:
+            exists = self.db.execute(
+                """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'index' AND name = 'idx_chunks_symbol_piece'
+                """
+            ).fetchone()
+            if exists is None:
+                self.db.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_chunks_symbol_piece
+                    ON chunks(symbolId, pieceIndex)
+                    """
+                )
+        except sqlite3.Error:
+            logger.warning(
+                "Could not create optional idx_chunks_symbol_piece index",
+                exc_info=True,
+            )
 
     def find_symbols(
         self,
@@ -51,10 +90,11 @@ class SymbolLookup:
     ) -> list[SymbolMatch]:
         """Return unique matching symbol rows in deterministic order.
 
-        Exact matching is a case-sensitive ``symbols.name = ?`` lookup. The
-        fallback is a case-insensitive substring lookup and is used only when
-        the exact lookup returns no rows. When multiple rows reconstruct to
-        identical code, only the first deterministically ordered row remains.
+        Matching uses three tiers: case-sensitive exact name, then
+        case-insensitive exact name, then case-insensitive substring. A later
+        tier is used only when the previous tier returns no rows. When
+        multiple rows expose the same indexed code range and piece count,
+        only the first deterministically ordered row remains.
         """
 
         if not name:
@@ -85,7 +125,7 @@ class SymbolLookup:
             [name, *scope_params],
         ).fetchall()
         if case_insensitive_rows:
-            matches = [self._match_from_row(row, "exact-case-insensitive") for row in case_insensitive_rows]
+            matches = [self._match_from_row(row, "exact") for row in case_insensitive_rows]
             return self._deduplicate_matches(matches, scope)
 
         substring_rows = self.db.execute(
@@ -106,23 +146,16 @@ class SymbolLookup:
         matches: list[SymbolMatch],
         scope: _Scope,
     ) -> list[SymbolMatch]:
-        """Keep one symbol row for each unique reconstructed code.
-
-        The input list is already deterministically ordered. Therefore the
-        first symbol that owns a given reconstructed text is retained and
-        later aliases are removed. A container's key includes all descendant
-        chunks, so a file symbol and a class symbol that expose the same code
-        collapse to one result while distinct overloads remain separate.
-        """
+        """Keep the first deterministically ordered row for each cheap key."""
 
         unique: list[SymbolMatch] = []
-        seen_code: set[str] = set()
+        seen_keys: set[tuple[str, int, int, int]] = set()
         for match in matches:
-            code = self.reconstruct(match.id, _scope=scope).reconstructed_text
-            if code in seen_code:
+            key = self._dedupe_key(match.id)
+            if key in seen_keys:
                 continue
-            seen_code.add(code)
             unique.append(match)
+            seen_keys.add(key)
         return unique
 
     def lookup(
@@ -133,6 +166,9 @@ class SymbolLookup:
         selected_symbol_id: Optional[str] = None,
         tags: Optional[Sequence[Any]] = None,
         filter_paths: Optional[Sequence[str]] = None,
+        detail: Literal["signature", "body"] = "body",
+        include_children: bool = True,
+        max_lines: int = 0,
     ) -> LookupResult:
         """Find symbols and optionally reconstruct one selected symbol.
 
@@ -141,6 +177,7 @@ class SymbolLookup:
         best-match choice is made.
         """
 
+        self._validate_render_options(detail, max_lines)
         if symbol_id is not None and selected_symbol_id is not None:
             if str(symbol_id) != str(selected_symbol_id):
                 raise ValueError("symbol_id and selected_symbol_id disagree")
@@ -159,12 +196,24 @@ class SymbolLookup:
             match = next((item for item in matches if item.id == str(selected_id)), None)
             if match is None:
                 raise ValueError("symbol_id must identify one of the matching symbols")
-            selected = self.reconstruct(
+            selected = self._reconstruct_for_lookup(
                 match.id,
                 tags=self.tags,
                 filter_paths=filter_paths,
+                detail=detail,
+                include_children=include_children,
+                max_lines=max_lines,
             )
-        return LookupResult(query=name, matches=matches, selected=selected)
+        limitations = (
+            "Name-based lookup returns definitions; callers require grep_search; "
+            "no call-graph data.",
+        ) if selected is not None else ()
+        return LookupResult(
+            query=name,
+            matches=matches,
+            selected=selected,
+            limitations=limitations,
+        )
 
     def reconstruct(
         self,
@@ -181,12 +230,50 @@ class SymbolLookup:
         """
 
         scope = _scope or self._build_scope(self.tags, filter_paths)
+        return self._reconstruct_for_scope(
+            str(symbol_id),
+            scope,
+            detail="body",
+            include_children=True,
+            max_lines=0,
+        )
+
+    def _reconstruct_for_lookup(
+        self,
+        symbol_id: str,
+        *,
+        tags: Optional[Sequence[Any]],
+        filter_paths: Optional[Sequence[str]],
+        detail: Literal["signature", "body"],
+        include_children: bool,
+        max_lines: int,
+    ) -> SymbolCode:
+        # Keep the current lookup scoping behavior, including its use of the
+        # instance's current tags.
+        scope = self._build_scope(self.tags, filter_paths)
+        return self._reconstruct_for_scope(
+            str(symbol_id),
+            scope,
+            detail=detail,
+            include_children=include_children,
+            max_lines=max_lines,
+        )
+
+    def _reconstruct_for_scope(
+        self,
+        symbol_id: str,
+        scope: _Scope,
+        *,
+        detail: Literal["signature", "body"],
+        include_children: bool,
+        max_lines: int,
+    ) -> SymbolCode:
         row = self._symbol_row(str(symbol_id), scope)
         if row is None:
             raise KeyError(f"symbol not found: {symbol_id}")
 
         rows_by_id = {str(row["id"]): row}
-        if str(row["type"]).casefold() in {"file", "class"}:
+        if include_children and str(row["type"]).casefold() in {"file", "class"}:
             descendant_rows = self.db.execute(
                 """
                 WITH RECURSIVE descendants(id) AS (
@@ -220,7 +307,10 @@ class SymbolLookup:
         for child_rows in children.values():
             child_rows.sort(key=self._symbol_sort_key)
 
-        return self._build_code_tree(row, children)
+        code = self._build_code_tree(row, children, max_lines=max_lines)
+        if detail == "signature":
+            code = self._signature_tree(code, max_lines=max_lines)
+        return code
 
     async def retrieve(
         self,
@@ -230,6 +320,9 @@ class SymbolLookup:
         selected_symbol_id: Optional[str] = None,
         tags: Optional[Sequence[Any]] = None,
         filter_paths: Optional[Sequence[str]] = None,
+        detail: Literal["signature", "body"] = "body",
+        include_children: bool = True,
+        max_lines: int = 0,
     ) -> LookupResult:
         """Async convenience wrapper for callers with an async pipeline."""
 
@@ -239,6 +332,9 @@ class SymbolLookup:
             selected_symbol_id=selected_symbol_id,
             tags=self.tags,
             filter_paths=filter_paths,
+            detail=detail,
+            include_children=include_children,
+            max_lines=max_lines,
         )
 
     # ------------------------------------------------------------------
@@ -333,11 +429,47 @@ class SymbolLookup:
         self,
         row: sqlite3.Row,
         children: dict[str, list[sqlite3.Row]],
+        *,
+        chunk_rows_by_symbol: Optional[dict[str, list[sqlite3.Row]]] = None,
+        max_lines: int = 0,
     ) -> SymbolCode:
+        if chunk_rows_by_symbol is None:
+            symbol_ids: list[str] = []
+
+            def collect_ids(current: sqlite3.Row) -> None:
+                current_id = str(current["id"])
+                symbol_ids.append(current_id)
+                for child in children.get(current_id, ()):
+                    collect_ids(child)
+
+            collect_ids(row)
+            chunk_rows_by_symbol = self._load_chunks_by_symbol(symbol_ids)
+
         symbol_id = str(row["id"])
-        piece_rows = self._ordered_chunks(symbol_id)
+        piece_rows = self._ordered_chunks_from_rows(
+            chunk_rows_by_symbol.get(symbol_id, ())
+        )
+        piece_contents = tuple(str(piece["content"]) for piece in piece_rows)
+        included_pieces, rendered_code = self._limit_pieces(
+            piece_contents,
+            max_lines,
+        )
+        signature_piece = next(
+            (piece for piece in piece_rows if int(piece["pieceIndex"]) == 0),
+            piece_rows[0] if piece_rows else None,
+        )
+        signature_value = (
+            None
+            if signature_piece is None or signature_piece["signature"] is None
+            else str(signature_piece["signature"])
+        )
         child_codes = tuple(
-            self._build_code_tree(child, children)
+            self._build_code_tree(
+                child,
+                children,
+                chunk_rows_by_symbol=chunk_rows_by_symbol,
+                max_lines=max_lines,
+            )
             for child in children.get(symbol_id, ())
         )
         return SymbolCode(
@@ -347,21 +479,43 @@ class SymbolLookup:
             path=str(row["path"]),
             start_line=int(row["startLine"]),
             end_line=int(row["endLine"]),
-            code="".join(str(piece["content"]) for piece in piece_rows),
+            code=rendered_code,
+            signature=signature_value,
             children=child_codes,
-            pieces=tuple(str(piece["content"]) for piece in piece_rows),
+            pieces=included_pieces,
         )
 
     def _ordered_chunks(self, symbol_id: str) -> list[sqlite3.Row]:
+        rows_by_symbol = self._load_chunks_by_symbol([str(symbol_id)])
+        return self._ordered_chunks_from_rows(rows_by_symbol.get(str(symbol_id), ()))
+
+    def _load_chunks_by_symbol(
+        self,
+        symbol_ids: Sequence[str],
+    ) -> dict[str, list[sqlite3.Row]]:
+        ids = list(dict.fromkeys(str(symbol_id) for symbol_id in symbol_ids))
+        if not ids:
+            return {}
+        marks = ",".join("?" for _ in ids)
         rows = self.db.execute(
-            """
-            SELECT id, pieceIndex, pieceCount, prevChunk, nextChunk,
-                   content, startLine, endLine, idx
+            f"""
+            SELECT id, symbolId, pieceIndex, pieceCount, prevChunk, nextChunk,
+                   signature, content, startLine, endLine, idx
             FROM chunks
-            WHERE symbolId = ?
+            WHERE symbolId IN ({marks})
             """,
-            [symbol_id],
+            ids,
         ).fetchall()
+        grouped: dict[str, list[sqlite3.Row]] = defaultdict(list)
+        for row in rows:
+            grouped[str(row["symbolId"])].append(row)
+        return grouped
+
+    def _ordered_chunks_from_rows(
+        self,
+        rows: Sequence[sqlite3.Row],
+    ) -> list[sqlite3.Row]:
+        rows = list(rows)
         if len(rows) < 2:
             return rows
 
@@ -386,15 +540,100 @@ class SymbolLookup:
             remaining = [row for row in rows if str(row["id"]) not in seen]
             ordered.extend(sorted(remaining, key=self._piece_sort_key))
         return ordered
-    
-    def _dedupe_key(self, symbol_id: str) -> str:
+
+    @staticmethod
+    def _limit_pieces(
+        pieces: tuple[str, ...],
+        max_lines: int,
+    ) -> tuple[tuple[str, ...], str]:
+        full_code = "".join(pieces)
+        if max_lines <= 0 or len(pieces) == 0:
+            return pieces, full_code
+
+        included: list[str] = []
+        for piece in pieces:
+            candidate = "".join(included) + piece
+            if len(candidate.splitlines()) > max_lines:
+                omitted_lines = max(
+                    0,
+                    len(full_code.splitlines())
+                    - len("".join(included).splitlines()),
+                )
+                sentinel = (
+                    f"# ... {omitted_lines} more lines omitted, use "
+                    'detail="signature" or read_file for the rest ...'
+                )
+                prefix = "".join(included)
+                rendered = prefix + ("" if not prefix or prefix.endswith("\n") else "\n")
+                return tuple(included), rendered + sentinel
+            included.append(piece)
+
+        return pieces, full_code
+
+    @staticmethod
+    def _signature_tree(
+        code: SymbolCode,
+        *,
+        max_lines: int = 0,
+        include_children: bool = True,
+    ) -> SymbolCode:
+        signature_pieces = () if code.signature is None else (code.signature,)
+        _, rendered_signature = SymbolLookup._limit_pieces(
+            signature_pieces,
+            max_lines,
+        )
+        return SymbolCode(
+            id=code.id,
+            name=code.name,
+            type=code.type,
+            path=code.path,
+            start_line=code.start_line,
+            end_line=code.end_line,
+            code=rendered_signature,
+            signature=code.signature,
+            children=(
+                tuple(
+                    SymbolLookup._signature_tree(
+                        child,
+                        max_lines=max_lines,
+                        include_children=False,
+                    )
+                    for child in code.children
+                )
+                if include_children
+                else ()
+            ),
+            pieces=(),
+        )
+
+    @staticmethod
+    def _validate_render_options(
+        detail: Literal["signature", "body"],
+        max_lines: int,
+    ) -> None:
+        if detail not in {"signature", "body"}:
+            raise ValueError('detail must be "signature" or "body"')
+        if max_lines < 0:
+            raise ValueError("max_lines must be non-negative")
+
+    def _dedupe_key(self, symbol_id: str) -> tuple[str, int, int, int]:
         row = self.db.execute(
-            """SELECT path, startLine, endLine,
-                    (SELECT COUNT(*) FROM chunks WHERE symbolId = ?) AS pieces
-            FROM symbols WHERE id = ?""",
-            (symbol_id, symbol_id),
+            """
+            SELECT s.path, s.startLine, s.endLine,
+                   (SELECT COUNT(*) FROM chunks WHERE symbolId = s.id) AS pieces
+            FROM symbols s
+            WHERE s.id = ?
+            """,
+            [symbol_id],
         ).fetchone()
-        return f"{row['path']}:{row['startLine']}:{row['endLine']}:{row['pieces']}"
+        if row is None:
+            raise KeyError(f"symbol not found: {symbol_id}")
+        return (
+            str(row["path"]),
+            int(row["startLine"]),
+            int(row["endLine"]),
+            int(row["pieces"]),
+        )
 
     @staticmethod
     def _piece_sort_key(row: sqlite3.Row) -> tuple[Any, ...]:
