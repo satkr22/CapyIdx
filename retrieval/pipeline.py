@@ -20,11 +20,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, Sequence, List
 
-from .models import LookupResult, SymbolCode, SymbolMatch
+from retrieval.models import LookupResult, SymbolCode, SymbolMatch
 from retrieval.utils import get_current_tags
 
-# test purpose
-from base.index_d import BranchAndDir
 
 
 logger = logging.getLogger(__name__)
@@ -35,12 +33,6 @@ class _Scope:
     tags: tuple[str, ...] = ()
     paths: tuple[str, ...] = ()
 
-_tags = [
-    BranchAndDir(
-        directory="file:///home/usatkr/u_ml/projects/continue_fork",
-        branch="NONE"
-    )
-]
 
 class SymbolLookup:
     """Lookup and reconstruct symbols from an existing SQLite connection.
@@ -53,8 +45,7 @@ class SymbolLookup:
     def __init__(self, db: sqlite3.Connection, roots:List[str]) -> None:
         self.db = db
         self.db.row_factory = sqlite3.Row
-        self.tags = _tags
-        # self.tags = get_current_tags(roots)
+        self.tags = get_current_tags(roots)
         self._ensure_chunk_piece_index()
 
     def _ensure_chunk_piece_index(self) -> None:

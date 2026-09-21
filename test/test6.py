@@ -17,7 +17,7 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
-from retrieval_2 import SymbolCode, SymbolLookup
+from retrieval import SymbolCode, SymbolLookup
 from utils.paths import get_index_sqlite_path
 from utils.disk_operations import DiskOperations
 
