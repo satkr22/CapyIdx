@@ -18,18 +18,28 @@ async def main():
     SqliteDB.initialize()
     db = SqliteDB.get()
     fs = DiskOperations(roots=[str(WORKSPACE)])
-    emb = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
+    # emb = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
 
-    chunk_index = ChunkCodebaseIndex(db=db, filesystem=fs, max_chunk_size=emb.max_embedding_chunk_size)
-    fts_index = FullTextSearchCodebaseIndex(db=db)
-    snippets_index = CodeSnippetsCodebaseIndex(filesystem=fs, db=db)
-    lance_index = await LanceDbIndex.create(db=db, embeddings_provider=emb, filesystem=fs)
-    if lance_index is None:
-        raise RuntimeError("Failed to create LanceDB index")
+    chunk_index = ChunkCodebaseIndex(
+        db=db, 
+        filesystem=fs, 
+        max_chunk_size=512
+        # max_chunk_size=emb.max_embedding_chunk_size
+    )
+    # fts_index = FullTextSearchCodebaseIndex(db=db)
+    # snippets_index = CodeSnippetsCodebaseIndex(filesystem=fs, db=db)
+    # lance_index = await LanceDbIndex.create(db=db, embeddings_provider=emb, filesystem=fs)
+    # if lance_index is None:
+    #     raise RuntimeError("Failed to create LanceDB index")
     
     indexer = CodeIndexer(
         fs=fs,
-        indexes=[chunk_index, fts_index, snippets_index, lance_index],
+        indexes=[
+            chunk_index, 
+            # fts_index, 
+            # snippets_index, 
+            # lance_index
+        ],
     )
 
     # 1) Initial full index

@@ -52,6 +52,7 @@ default_ignore_file_and_dir: List[str] = [
 
 
 # --- Ignore wrapper (thin) -------------------------------------------------
+# --- Ignore wrapper (thin) -------------------------------------------------
 class Ignore:
     """Chainable gitignore matcher, mirroring npm `ignore`'s used surface."""
 
@@ -79,11 +80,23 @@ class Ignore:
 _COMMENT_OR_EMPTY = re.compile(r"^#|^$")
 
 
-def git_ig_array_from_file(file: str) -> List[str]:
+def git_ig_array_from_file(content: str) -> List[str]:
     """Split a .gitignore-style file into a list of clean pattern strings."""
     return [
         line
-        for raw in re.split(r"\r?\n", file)
+        for raw in re.split(r"\r?\n", content)
+        for line in [raw.strip()]
+        if not _COMMENT_OR_EMPTY.match(line)
+    ]
+    
+def git_ig_array_from_file_path(path: str) -> List[str]:
+    if path.startswith("file://"):
+        path = path.replace("file://", "")
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    return [
+        line
+        for raw in re.split(r"\r?\n", content)
         for line in [raw.strip()]
         if not _COMMENT_OR_EMPTY.match(line)
     ]

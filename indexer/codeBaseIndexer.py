@@ -36,6 +36,7 @@ from base.refresh_index import IndexLock, get_compute_delete_add_remove
 from walker.walk_dir import WalkerOptions, walk_dir_async
 from watcher.file_watcher import FileWatcher, AutoFileWatcher
 from utils.uri import get_uri_path_basename, get_uri_to_path
+from utils.disk_operations import DiskOperations
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -162,7 +163,7 @@ class CodeIndexer:
 
     def __init__(
         self,
-        fs: FileSystem,
+        fs: DiskOperations,
         indexes: Optional[List[CodebaseIndexer]] = None,
         watcher: FileWatcher | None = None,
         # index_types: Optional[Set[ContextIndexingType]] = None,

@@ -358,7 +358,7 @@ async def walk(
                         result,
                         max_chunk_size,
                         class_symbol.id,
-                        allow_chunking=False,
+                        allow_chunking=True, # allowed small methods too to get their own chunks
                     ):
                         yield nested
             return

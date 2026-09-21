@@ -1,18 +1,22 @@
+from __future__ import annotations
+
 # retrieval/base_pipeline.py
 from abc import ABC
 from collections import defaultdict
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 import os
 import re
 import sqlite3
 import subprocess
 
 from base.index_d import RetrieveConfig, BranchAndDir
-from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
-from lance_db.lanceDbIndex import LanceDbIndex
 from retrieval.models import Candidate, ContextItem
-from embeddings.base import Embeddings
-from retrieval.rerankers import BaseReranker
+
+if TYPE_CHECKING:
+    from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
+    from lance_db.lanceDbIndex import LanceDbIndex
+    from embeddings.base import Embeddings
+    from retrieval.rerankers import BaseReranker
 
 from utils.parameters import DEFAULTS, RERANK_DEFAULTS, RETRIEVAL_PARAMS
 # Tunables. Any of these can be overridden by adding the key to RETRIEVAL_PARAMS.
@@ -172,11 +176,16 @@ class BaseRetrievalPipeline(ABC):
     # FTS query construction
     # ------------------------------------------------------------------
     def _build_fts_query(self, query: str) -> str:
-        """Identifiers -> quoted phrases (substring match under the trigram tokenizer).
-        No identifiers -> OR of quoted content words (generic words removed)."""
+        """Build a conservative lexical query while retaining identifier recall."""
         idents = extract_identifiers(query)
         if idents:
-            terms = [v for i in idents for v in _identifier_variants(i) if len(v) >= 3]
+            terms = [
+                v
+                for ident in idents
+                for part in (ident, *ident.split("."))
+                for v in _identifier_variants(part)
+                if len(v) >= 3
+            ]
             return " OR ".join(_quote(t) for t in dict.fromkeys(terms))
         return self._build_nl_fts_query(query)
 
@@ -192,22 +201,30 @@ class BaseRetrievalPipeline(ABC):
         idents = extract_identifiers(query)
         if not idents:
             return []
-        names = list({i.lower() for i in idents})
+        names = list(
+            dict.fromkeys(
+                variant
+                for ident in idents
+                for part in (ident, *ident.split("."))
+                for variant in _identifier_variants(part)
+            )
+        )
         ph = _ph(names)
 
+        # Exact symbol matches are anchors. Child symbols are expanded only
+        # after ranking, otherwise a class query floods the candidate list with
+        # every method under that class before lexical/vector ranking happens.
         rows = self.db.execute(
             f"""
-            SELECT c.id AS id, c.path AS path,
-                   CASE WHEN lower(s.name) IN ({ph}) THEN 0 ELSE 1 END AS kind
+            SELECT c.id AS id, c.path AS path
             FROM chunks c
             JOIN symbols s ON s.id = c.symbolId
-            LEFT JOIN symbols p ON p.id = s.parentId
-            WHERE lower(s.name) IN ({ph}) OR lower(p.name) IN ({ph})
-            ORDER BY kind, c.path, c.idx
+            WHERE lower(s.name) IN ({ph})
+            ORDER BY c.path, c.idx
             """,
-            names * 3,
+            names,
         ).fetchall()
-        found = [(r["id"], "symbol_match" if r["kind"] == 0 else "symbol_child", r["path"]) for r in rows]
+        found = [(r["id"], "symbol_match", r["path"]) for r in rows]
 
         if not found:  # fall back to file-stem match: chunkCodebaseIndex -> chunkCodebaseIndex.py
             for name in names:
@@ -232,28 +249,31 @@ class BaseRetrievalPipeline(ABC):
     # Candidate pruning + fusion
     # ------------------------------------------------------------------
     def _prune_candidates(self, cands):
-        vec = [c.vector_score for c in cands if c.vector_score is not None]
-        top_vec = max(vec) if vec else None
+        vector_ranked = sorted(
+            (c for c in cands if c.vector_score is not None),
+            key=lambda c: c.vector_score,
+            reverse=True,
+        )
+        top_vec = vector_ranked[0].vector_score if vector_ranked else None
         fts_ranked = sorted(
             (c for c in cands if c.bm25_score is not None),
             key=lambda c: c.bm25_score,
         )
         fts_keep = {c.chunk_id for c in fts_ranked[: _param("ftsKeep")]}
 
-        # NEW: no meaningful vector signal -> don't prune on vector at all.
-        # Keep everything that came from FTS or has an anchor; vector-only stays too.
-        weak_signal = (top_vec is None) or (top_vec < 0.55)
+        vector_keep = {c.chunk_id for c in vector_ranked[: _param("vectorKeep")]}
 
         kept = []
         for c in cands:
             keep = (
                 anchor_score(c) > 0
                 or c.chunk_id in fts_keep
-                or c.bm25_score is not None
-                or weak_signal
-                or (top_vec is not None
+                or c.chunk_id in vector_keep
+                or (
+                    top_vec is not None
                     and c.vector_score is not None
-                    and c.vector_score >= top_vec - _param("vecGap"))
+                    and c.vector_score >= top_vec - _param("vecGap")
+                )
             )
             if keep:
                 kept.append(c)
@@ -273,34 +293,45 @@ class BaseRetrievalPipeline(ABC):
             key=lambda c: c.bm25_score if c.bm25_score is not None else float("inf"),
         )  # most negative first
         sym = sorted((c for c in cands if anchor_score(c) > 0), key=lambda c: -anchor_score(c))
-        for lst, weight in ((vec, 1.0), (fts, 0.7), (sym, 2.0)):
+        for lst, weight in ((vec, 0.75), (fts, 1.25), (sym, 4.0)):
             for rank, c in enumerate(lst, 1):
                 c.final_score += weight / (k + rank)  # type: ignore
 
     def _fuse_weighted(self, cands, w_vec=0.65, w_bm25=0.35):
-        bm = [c.bm25_score for c in cands if c.bm25_score is not None]
-        best, worst = (min(bm), max(bm)) if bm else (0.0, 0.0)
-        span = worst - best
-
-        # Scale vector contribution so weak cosines don't dominate.
-        vec_all = [c.vector_score for c in cands if c.vector_score is not None]
-        top_vec = max(vec_all) if vec_all else 0.0
-        # Squash: cosines below ~0.4 collapse toward 0
-        def vsc(v):
-            if v is None:
-                return 0.0
-            return max(0.0, (v - 0.30) / (top_vec - 0.30 + 1e-9)) * top_vec
+        """Fuse source ranks instead of model-specific absolute score scales."""
+        vec_rank = {
+            c.chunk_id: rank
+            for rank, c in enumerate(
+                sorted(
+                    (c for c in cands if c.vector_score is not None),
+                    key=lambda c: c.vector_score,
+                    reverse=True,
+                ),
+                1,
+            )
+        }
+        fts_rank = {
+            c.chunk_id: rank
+            for rank, c in enumerate(
+                sorted(
+                    (c for c in cands if c.bm25_score is not None),
+                    key=lambda c: c.bm25_score,
+                ),
+                1,
+            )
+        }
 
         for c in cands:
-            nb = ((worst - c.bm25_score) / span) if (span > 0 and c.bm25_score is not None) else \
-                (1.0 if c.bm25_score is not None else 0.0)
-            v = vsc(c.vector_score)
+            vr = vec_rank.get(c.chunk_id)
+            fr = fts_rank.get(c.chunk_id)
+            v = 1.0 / vr if vr is not None else 0.0
+            nb = 1.0 / fr if fr is not None else 0.0
             base = w_vec * v + w_bm25 * nb
             # Both-source bonus
             if c.vector_score is not None and c.bm25_score is not None:
-                base += 0.15
+                base += 0.20
             c.normalized_bm25 = nb
-            c.final_score = base + 0.5 * anchor_score(c)
+            c.final_score = base + 0.75 * anchor_score(c)
     
 
 

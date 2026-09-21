@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from retrieval.base_pipeline import BaseRetrievalPipeline, _param, _ph, _rparam
+from retrieval.base_pipeline import (
+    BaseRetrievalPipeline,
+    _param,
+    _ph,
+    _rparam,
+    anchor_score,
+)
 from retrieval.models import Candidate, ContextItem
 from retrieval.rerankers import BaseReranker
 from base.index_d import BranchAndDir
@@ -94,7 +100,14 @@ class RerankerRetrievalPipeline(BaseRetrievalPipeline):
         # 6. Symbol expansion AFTER ranking, around the top anchors only.
         #    Returns only new chunks; originals keep their own scores.
         known = {c.chunk_id for c in top}
-        context = await self._expand_via_symbols(top[: _param("anchorCount")], known)
+        expansion_anchors = [
+            c
+            for c in top
+            if anchor_score(c) > 0 or "fts" in (c.sources or [])
+        ]
+        context = await self._expand_via_symbols(
+            expansion_anchors[: _param("anchorCount")], known
+        )
 
         selected = top + context
 

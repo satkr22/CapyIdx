@@ -27,6 +27,7 @@ share/python-wheels/
 MANIFEST
 
 
+
 # PyInstaller
 #   Usually these files are written by a python script from a template
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -225,7 +226,8 @@ docs/flows
 # test2.py
 # test3.py
 index.ts
-# *.txt
+*.txt
 
 # my folders
 zhelper
+test

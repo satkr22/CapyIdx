@@ -5,7 +5,7 @@ from base.index_d import BranchAndDir
 from retrieval.utils import get_current_tags
 from utils.parameters import RETRIEVAL_PARAMS
 
-from retrieval.base_pipeline import _param, _ph
+from retrieval.base_pipeline import _param, _ph, anchor_score
 
 
 class NoRerankerRetrievalPipeline(BaseRetrievalPipeline):
@@ -48,7 +48,14 @@ class NoRerankerRetrievalPipeline(BaseRetrievalPipeline):
         # 5. Symbol expansion AFTER ranking, around the top anchors only.
         #    Returns only new chunks; originals keep their own scores.
         known = {c.chunk_id for c in top}
-        context = await self._expand_via_symbols(top[: _param("anchorCount")], known)
+        expansion_anchors = [
+            c
+            for c in top
+            if anchor_score(c) > 0 or "fts" in (c.sources or [])
+        ]
+        context = await self._expand_via_symbols(
+            expansion_anchors[: _param("anchorCount")], known
+        )
 
         selected = top + context
 

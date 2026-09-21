@@ -120,7 +120,7 @@ async def main():
     )
     
     print("[6/7] Initializing Reranker provider ...")
-    reranker = CrossEncoderReranker(model_name="jinaai/jina-reranker-v2-base-multilingual")
+    reranker = CrossEncoderReranker(model_name="BAAI/bge-reranker-base")
     # reranker = CrossEncoderReranker(model_name="BAAI/bge-reranker-base")
     print(f"  Reranker model: {reranker.model_id}")
 
