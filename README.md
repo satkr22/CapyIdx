@@ -1,4 +1,4 @@
-# CoreIndexer
+# CapyIdx
 
 CoreIndexer indexes source repositories into SQLite and provides deterministic
 symbol lookup and code reconstruction. It is designed to be embedded in tools
@@ -7,7 +7,7 @@ that need repository-aware code context.
 ## Installation
 
 ```bash
-python -m pip install coreindexer
+python -m pip install capyidx
 ```
 
 For development:
@@ -20,10 +20,10 @@ The core package uses Tree-sitter for source parsing and `tiktoken` for chunk
 size calculations. Optional integrations can be installed with extras:
 
 ```bash
-python -m pip install "coreindexer[openai]"
-python -m pip install "coreindexer[ollama]"
-python -m pip install "coreindexer[local-embeddings]"
-python -m pip install "coreindexer[vector]"
+python -m pip install "capyidx[openai]"
+python -m pip install "capyidx[ollama]"
+python -m pip install "capyidx[local-embeddings]"
+python -m pip install "capyidx[vector]"
 ```
 
 ## Basic usage
@@ -33,7 +33,7 @@ finish:
 
 ```python
 import asyncio
-from coreindexer import index_repo, lookup_symbol
+from capyidx import index_repo, lookup_symbol
 
 
 async def main() -> None:
@@ -54,7 +54,7 @@ asyncio.run(main())
 Use `index_repo_iter` when progress updates are needed:
 
 ```python
-from coreindexer import index_repo_iter
+from capyidx import index_repo_iter
 
 async for update in index_repo_iter("/path/to/git/repository"):
     print(update.status, update.progress, update.desc)
