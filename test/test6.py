@@ -66,22 +66,21 @@ DB_PATH = get_index_sqlite_path()
 WORKSPACE_DIR = Path.cwd()
 QUERYS = [
     # "dfswalker", 
-    # "chunkcodebase",
+    # "chunkcodebaseIndex",
     # "_insert_or_raise",
     # "SYMBOLLOOKUP",
     # "sound",
-    # "dog",
-    # "cat",
     # "update",
     # "main",
     # "construct_class_definition_chunk",
     # "collapse_children",
+    # another repo symbols
     # "RetrievalPipelineOptions",
     # "BaseRetrievalPipeline",
     # "retrieveContextItemsFromEmbeddings",
     # "HttpContextProvider",
     # "updateIndexAndAwaitGenerator",
-    "ChunkCodebaseIndex",
+    # "ChunkCodebaseIndex",
     # "createMemoryRouter",
     # "App"
     
@@ -125,7 +124,7 @@ async def main() -> None:
             print(f"[{index}] {name!r}")
             print("=" * 88)
 
-            result = lookup.lookup(name)
+            result = lookup.lookup(name, detail="signature")
             _print_matches(result)
 
             # A single match is selected automatically by the API. With
