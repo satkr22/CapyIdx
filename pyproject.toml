@@ -1,0 +1,5 @@
+[tool.hatch.build.targets.wheel]
+packages = ["src/coreindexer"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

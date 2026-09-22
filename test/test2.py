@@ -1,16 +1,16 @@
 import asyncio
 from pathlib import Path
 
-from base.db import SqliteDB
-from utils.disk_operations import DiskOperations
-from indexer.codebase_indexer import CodeIndexer
-from chunker.chunk_code_base_index import ChunkCodebaseIndex
-from fts.fulltextsearch_codebase_index import FullTextSearchCodebaseIndex
-from codesnippet.code_snippets_index import CodeSnippetsCodebaseIndex
-from lance_db.lancedb_index import LanceDbIndex
-from embeddings.local import LocalEmbeddings
-from base.index_d import BranchAndDir
-from utils.retrieval_utils import get_current_tags
+from src.coreindexer.db.db import SqliteDB
+from src.coreindexer.utils.disk_operations import DiskOperations
+from src.coreindexer.indexer.codebase_indexer import CodeIndexer
+from coreindexer.chunker.chunk_codebase_index import ChunkCodebaseIndex
+from src.coreindexer.fts.fulltextsearch_codebase_index import FullTextSearchCodebaseIndex
+from src.coreindexer.codesnippet.code_snippets_index import CodeSnippetsCodebaseIndex
+from src.coreindexer.lance_db.lancedb_index import LanceDbIndex
+from src.coreindexer.embeddings.local import LocalEmbeddings
+from src.coreindexer.base.index_d import BranchAndDir
+from src.coreindexer.utils.retrieval_utils import get_current_tags
 
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
