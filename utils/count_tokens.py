@@ -1,6 +1,4 @@
 """
-Python port of countTokens.ts
-
 The async-encoder / worker-pool infrastructure has been removed
 (AsyncEncoder, LlamaAsyncEncoder, NonWorkerAsyncEncoder,
 autodetectTemplateType, IS_BINARY branch, llamaTokenizer fallback).
@@ -12,6 +10,7 @@ import json
 import asyncio
 import tiktoken
 from typing import Any, Dict, List, Optional, Union
+from functools import lru_cache
 
 
 # Importing a bunch of tokenizers can be very resource intensive (MB-scale per tokenizer)
@@ -114,7 +113,7 @@ def count_tokens(content: MessageContent, model_name: str = "llama2") -> int:
     return _get_adjusted_token_count_from_model(base_tokens, model_name)
 
 
-async def count_tokens_async(content: MessageContent, model_name: str = "llama2") -> int:
+async def count_tokens_async__(content: MessageContent, model_name: str = "llama2") -> int:
     
     # Delegate to the sync implementation on a worker thread so the event
     # loop is not blocked by tiktoken's CPU-bound encode. This guarantees
@@ -122,7 +121,18 @@ async def count_tokens_async(content: MessageContent, model_name: str = "llama2"
     # applied by _get_adjusted_token_count_from_model.
     return await asyncio.to_thread(count_tokens, content, model_name)
     
-    
+@lru_cache(maxsize=32768)
+def _count_cached(text: str, model_name: str) -> int:
+    if model_name == "llama2":
+        # Indexer path: no multiplier, straight cl100k count.
+        return len(_encoding_for_model(model_name).encode(text, disallowed_special=()))
+    return count_tokens(text, model_name)
+
+async def count_tokens_async(content: MessageContent, model_name: str = "llama2") -> int:
+    if isinstance(content, str):
+        return _count_cached(content, model_name)
+    # List content (chat messages with parts) — rare in the indexer path.
+    return await asyncio.to_thread(count_tokens, content, model_name)    
     
     
     

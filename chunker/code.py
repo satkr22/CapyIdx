@@ -113,6 +113,16 @@ def get_method_nodes(class_node: Node) -> list[Node]:
     ]
 
 async def _char_split(blob: bytes, max_chunk_size: int) -> list[bytes]:
+    
+    # add logger for char spit
+    print("Charater splitting triggered because any single symbol is excedding the max token bugdet.")
+    
+    import logging
+    logging.getLogger(__name__).warning(
+        "char-split: %d bytes, first 200 chars: %r",
+        len(blob), blob[:200].decode(errors="replace"),
+    )
+    
     text = blob.decode()
     out: list[bytes] = []
     i, n = 0, len(text)
@@ -147,15 +157,27 @@ async def _split_oversized(
 
     pieces: list[bytes] = []
     current: list[bytes] = []
-
+    
+    current_tokens = 0
+    
     for line in content.split(b"\n"):
-        candidate_lines = current + [line]
-        candidate = b"\n".join(candidate_lines)
-        if current and await count_tokens_async(candidate.decode()) > max_chunk_size:
+        line_tokens = await count_tokens_async(line.decode())
+        if current and current_tokens + line_tokens + 1 > max_chunk_size:
             pieces.append(b"\n".join(current))
             current = [line]
+            current_tokens = line_tokens
         else:
-            current = candidate_lines
+            current.append(line)
+            current_tokens += line_tokens + (1 if len(current) > 1 else 0)
+    
+    # for line in content.split(b"\n"):
+    #     candidate_lines = current + [line]
+    #     candidate = b"\n".join(candidate_lines)
+    #     if current and await count_tokens_async(candidate.decode()) > max_chunk_size:
+    #         pieces.append(b"\n".join(current))
+    #         current = [line]
+    #     else:
+    #         current = candidate_lines
 
     if current:
         pieces.append(b"\n".join(current))
@@ -401,31 +423,63 @@ async def _emit_body_chunks(
     header_tokens = await count_tokens_async(header.decode())
     budget = max(max_chunk_size - header_tokens, 1)
 
+    # i = 0
+    # while i < len(statements):
+    #     start = i
+    #     end = i
+
+    #     while end + 1 < len(statements):
+    #         span = code[
+    #             statements[start].start_byte :
+    #             statements[end + 1].end_byte
+    #         ]
+    #         if await count_tokens_async(span.decode()) > budget:
+    #             break
+    #         end += 1
+
+    #     span = code[
+    #         statements[start].start_byte :
+    #         statements[end].end_byte
+    #     ]
+    #     combined = header + b"\n" + span
+    #     end_line = statements[end].end_point[0] + 1
+        
+    #     if await count_tokens_async(combined.decode()) <= max_chunk_size:
+    #         yield (combined.decode(), func_start_line, end_line)
+    #     else:
+    #         # Single statement (or group) bigger than budget.
+    #         for piece in await _split_oversized(combined, max_chunk_size):
+    #             yield (piece.decode(), func_start_line, end_line)
+    #     i = end + 1
+    
+    
+    
     i = 0
     while i < len(statements):
         start = i
         end = i
+        running = await count_tokens_async(
+            code[statements[start].start_byte : statements[start].end_byte].decode()
+        )
 
         while end + 1 < len(statements):
-            span = code[
-                statements[start].start_byte :
-                statements[end + 1].end_byte
-            ]
-            if await count_tokens_async(span.decode()) > budget:
+            nxt = await count_tokens_async(
+                code[statements[end + 1].start_byte : statements[end + 1].end_byte].decode()
+            )
+            # +1 for the newline separator between statements
+            if running + nxt + 1 > budget:
                 break
+            running += nxt + 1
             end += 1
 
-        span = code[
-            statements[start].start_byte :
-            statements[end].end_byte
-        ]
+        span = code[statements[start].start_byte : statements[end].end_byte]
         combined = header + b"\n" + span
         end_line = statements[end].end_point[0] + 1
-        
+
+        # Exact check of the actually-emitted string:
         if await count_tokens_async(combined.decode()) <= max_chunk_size:
             yield (combined.decode(), func_start_line, end_line)
         else:
-            # Single statement (or group) bigger than budget.
             for piece in await _split_oversized(combined, max_chunk_size):
                 yield (piece.decode(), func_start_line, end_line)
         i = end + 1
@@ -479,11 +533,11 @@ def _register_symbol(result: ChunkingResult, symbol: Symbol) -> None:
     """Append symbol to graph AND attach it to its parent's children list."""
     result.symbols.append(symbol)
     result.symbol_map[symbol.id] = symbol
-
+    
     if symbol.parent_id is not None:
         parent = result.symbol_map[symbol.parent_id]
-        if symbol.id not in parent.children:
-            parent.children.append(symbol.id)
+        # if symbol.id not in parent.children:
+        parent.children.append(symbol.id)
 
 
 def _make_chonk(

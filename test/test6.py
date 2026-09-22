@@ -75,6 +75,7 @@ QUERYS = [
     "main",
     "construct_class_definition_chunk",
     "collapse_children",
+    "collect_ids"
     
     # another repo symbols
     
