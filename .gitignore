@@ -220,16 +220,3 @@ __marimo__/
 .streamlit/secrets.toml
 
 
-# my files
-docs/flows
-# test.py
-# test2.py
-# test3.py
-index.ts
-*.txt
-mcp.md
-
-# my folders
-zhelper
-test/result
-test/fixtures
