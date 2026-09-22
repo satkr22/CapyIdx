@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.resources import files
 
-import coreindexer
+import capyidx
 
 
 def test_package_exports_documented_public_api() -> None:
@@ -19,9 +19,9 @@ def test_package_exports_documented_public_api() -> None:
         "ResolvedLookup",
     }
 
-    assert expected <= set(coreindexer.__all__)
+    assert expected <= set(capyidx.__all__)
     for name in expected:
-        assert hasattr(coreindexer, name)
+        assert hasattr(capyidx, name)
 
 
 def test_package_data_contains_tree_sitter_queries() -> None:

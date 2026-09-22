@@ -4,7 +4,7 @@ import asyncio
 import subprocess
 from pathlib import Path
 
-import coreindexer
+import capyidx
 
 
 def test_public_api_indexes_and_retrieves_a_symbol(
@@ -47,7 +47,7 @@ def test_public_api_indexes_and_retrieves_a_symbol(
     async def smoke() -> None:
         updates = [
             update
-            async for update in coreindexer.index_repo_iter(
+            async for update in capyidx.index_repo_iter(
                 repo,
                 max_chunk_size=128,
             )
@@ -55,7 +55,7 @@ def test_public_api_indexes_and_retrieves_a_symbol(
         assert updates
         assert updates[-1].status == "done"
 
-        lookup = await coreindexer.lookup_symbol(
+        lookup = await capyidx.lookup_symbol(
             repo,
             "Greeter",
             detail="body",
@@ -65,17 +65,17 @@ def test_public_api_indexes_and_retrieves_a_symbol(
         assert lookup.selected.name == "Greeter"
         assert "class Greeter" in lookup.selected.reconstructed_text
 
-        reconstructed = await coreindexer.reconstruct_symbol(
+        reconstructed = await capyidx.reconstruct_symbol(
             repo,
             lookup.matches[0].id,
         )
         assert reconstructed.id == lookup.matches[0].id
         assert reconstructed.name == "Greeter"
 
-        resolved = await coreindexer.resolve_lookup(repo, "Greeter")
+        resolved = await capyidx.resolve_lookup(repo, "Greeter")
         assert [code.id for code in resolved.codes] == [lookup.matches[0].id]
 
-        async with coreindexer.open_lookup(repo) as session:
+        async with capyidx.open_lookup(repo) as session:
             session_lookup = session.lookup("Greeter", detail="signature")
         assert session_lookup.selected is not None
         assert session_lookup.selected.name == "Greeter"
