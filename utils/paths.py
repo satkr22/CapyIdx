@@ -1,12 +1,39 @@
 import os
 from pathlib import Path
 from typing import Callable, Awaitable, Union, Optional
+import hashlib
 
 def _resolve_coreIndexer_global_dir() -> Path:
 
     return Path.home() / ".coreIndexer"
 
 COREINDEXER_GLOBAL_DIR: Path = _resolve_coreIndexer_global_dir()
+
+DEFAULT_HOME_NAME = ".coreIndexer"
+DEFAULT_INDEX_DIR = ".codebase_index"
+
+def home() -> Path:
+    """Root data dir. Overridable with COREINDEXER_HOME."""
+    env = os.environ.get("COREINDEXER_HOME")
+    return Path(env).expanduser().resolve() if env else Path.home() / DEFAULT_HOME_NAME
+
+
+def index_dir() -> Path:
+    return home() / DEFAULT_INDEX_DIR
+
+
+def db_path_for(tags) -> Path:
+    """Deterministic per-(directory, branch) index path."""
+    key = f"{tags.directory}__{tags.branch}"
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return index_dir() / f"index__{digest}.sqlite"
+
+
+def metadata_path_for(tags) -> Path:
+    return db_path_for(tags).with_suffix(".metadata.json")
+
+
+
 
 
 def get_coreIndexer_global_path() -> Path:

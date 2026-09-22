@@ -3,21 +3,32 @@ from pathlib import Path
 
 from base.db import SqliteDB
 from utils.disk_operations import DiskOperations
-from indexer.codeBaseIndexer import CodeIndexer
-from chunker.chunkCodebaseIndex import ChunkCodebaseIndex
-from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
-from codesnippet.codeSnippetsIndex import CodeSnippetsCodebaseIndex
-from lance_db.lanceDbIndex import LanceDbIndex
+from indexer.codebase_indexer import CodeIndexer
+from chunker.chunk_code_base_index import ChunkCodebaseIndex
+from fts.fulltextsearch_codebase_index import FullTextSearchCodebaseIndex
+from codesnippet.code_snippets_index import CodeSnippetsCodebaseIndex
+from lance_db.lancedb_index import LanceDbIndex
 from embeddings.local import LocalEmbeddings
+from base.index_d import BranchAndDir
+from utils.retrieval_utils import get_current_tags
 
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+
 WORKSPACE = Path.cwd()
 
+
+
 async def main():
-    SqliteDB.initialize()
-    db = SqliteDB.get()
+    
     fs = DiskOperations(roots=[str(WORKSPACE)])
+    root = (await fs.get_workspace_dirs())
+    
+    workspace_tag = get_current_tags(root)[0]
+    
+    
+    SqliteDB(workspace_tag).initialize()
+    db = SqliteDB.get()
     # emb = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
 
     chunk_index = ChunkCodebaseIndex(
@@ -43,7 +54,6 @@ async def main():
     )
 
     # 1) Initial full index
-    root = (await fs.get_workspace_dirs())
     async for update in indexer.refresh_codebase_index(root):
         print(f"[{update.status}] {update.progress:.1%} {update.desc}")
 

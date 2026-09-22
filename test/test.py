@@ -32,14 +32,14 @@ from pathlib import Path
 from base.db import SqliteDB
 from utils.disk_operations import DiskOperations
 
-from chunker.chunkCodebaseIndex import ChunkCodebaseIndex
-from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
-from codesnippet.codeSnippetsIndex import CodeSnippetsCodebaseIndex
-from lance_db.lanceDbIndex import LanceDbIndex
+from chunker.chunk_code_base_index import ChunkCodebaseIndex
+from fts.fulltextsearch_codebase_index import FullTextSearchCodebaseIndex
+from codesnippet.code_snippets_index import CodeSnippetsCodebaseIndex
+from lance_db.lancedb_index import LanceDbIndex
 
 from embeddings.local import LocalEmbeddings
 
-from indexer.codeBaseIndexer import CodeIndexer
+from indexer.codebase_indexer import CodeIndexer
 
 
 # Change this to the repository you want to index

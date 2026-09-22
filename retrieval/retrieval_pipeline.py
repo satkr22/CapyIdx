@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Optional, Sequence, List
 
 from retrieval.models import LookupResult, SymbolCode, SymbolMatch
-from retrieval.utils import get_current_tags
+from utils.retrieval_utils import get_current_tags
 
 
 

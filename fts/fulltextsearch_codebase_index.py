@@ -20,7 +20,7 @@ from base.index_types import (
     RefreshIndexResults,
     
 )
-from chunker.chunkCodebaseIndex import ChunkCodebaseIndex
+from chunker.chunk_code_base_index import ChunkCodebaseIndex
 from utils.chunk_utils import tag_to_string
 from utils.uri import get_uri_path_basename
 from utils.parameters import RETRIEVAL_PARAMS
