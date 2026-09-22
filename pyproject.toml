@@ -1,5 +1,75 @@
-[tool.hatch.build.targets.wheel]
-packages = ["src/coreindexer"]
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coreindexer"
+version = "0.1.0"
+description = "Codebase indexing and deterministic symbol lookup for repositories."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pathspec>=0.12",
+    "tiktoken>=0.7",
+    "tree-sitter>=0.22",
+    "tree-sitter-language-pack>=0.7",
+    "watchdog>=4.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
+openai = [
+    "openai>=1.0",
+]
+ollama = [
+    "ollama>=0.3",
+]
+local-embeddings = [
+    "sentence-transformers>=3.0",
+]
+vector = [
+    "lancedb>=0.15",
+]
+dev = [
+    "build>=1.2",
+    "pytest>=8.0",
+]
+all = [
+    "build>=1.2",
+    "lancedb>=0.15",
+    "ollama>=0.3",
+    "openai>=1.0",
+    "pathspec>=0.12",
+    "pytest>=8.0",
+    "sentence-transformers>=3.0",
+    "tiktoken>=0.7",
+    "tree-sitter>=0.22",
+    "tree-sitter-language-pack>=0.7",
+    "watchdog>=4.0",
+]
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+coreindexer = ["utils/tree_sitter_queries/*.scm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+# anyio = "auto"

@@ -4,6 +4,10 @@ import sqlite3
 SCHEMA_VERSION = 1
 
 _DDL = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS tag_catalog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     dir TEXT NOT NULL,
