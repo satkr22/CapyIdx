@@ -10,7 +10,7 @@ import sqlite3
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, ClassVar
 
 from coreindexer.base.index_types import (
     CodebaseIndexer,
@@ -380,8 +380,8 @@ async def _noop_mark_complete(
 # ---------------------------------------------------------------------------
 
 class GlobalCacheCodeBaseIndex:
-    relative_expected_time: float = 1.0
-    artifact_id: str = "globalCache"
+    relative_expected_time: ClassVar[float] = 1.0
+    artifact_id: ClassVar[str] = "globalCache"
 
     def __init__(self, db: sqlite3.Connection) -> None:
         self.db = db
