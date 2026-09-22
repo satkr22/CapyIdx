@@ -31,50 +31,53 @@ def _short_path(path: str, width: int = 72) -> str:
 
 
 def _print_code_tree(node: SymbolCode, indent: str = "  ") -> None:
-    print(
-        f"{indent}{node.type} {node.name} "
-        f"({node.path}:{node.start_line}-{node.end_line})"
-    )
+    # print(
+    #     # f"  {indent}node_type: {node.type} \n    node_name: {node.name} "
+    #     # f"\n    path: ({node.path}:{node.start_line}-{node.end_line})"
+    # )
     print(f"{indent}  pieces: {len(node.pieces)}")
     if node.code:
-        print(f"{indent}  code:")
-        for line in node.code.splitlines() or [node.code]:
-            print(f"{indent}    {line}")
+        # print(f"{indent}\n    code:")
+        print("   ", node.code)
+        # for line in node.code.splitlines() or [node.code]:
+        #     print(f"{indent}    {line}")
     else:
-        print(f"{indent}  code: <no stored chunks>")
+        print(f"{indent}\n    code: <no stored chunks>")
 
     for child in node.children:
         _print_code_tree(child, indent + "  ")
 
 
 def _print_matches(result) -> None:
-    print(f"  match kind: {result.match_kind or 'none'}")
+    print(f"match kind: {result.match_kind or 'none'}")
     if not result.matches:
-        print("  matches: none")
+        print("matches: none")
         return
 
-    print(f"  matches: {len(result.matches)}")
+    print(f"matches: {len(result.matches)}")
     for index, match in enumerate(result.matches, 1):
         print(
-            f"    [{index}] {match.match_kind:<9} {match.id} "
-            f"{match.type:<10} {match.name} "
-            f"({match.path}:{match.start_line}-{match.end_line})"
+            f"\n[{index}] {match.match_kind:<9} \n    id: {match.id} "
+            f"\n    type: {match.type:<10} \n    name: {match.name} "
+            f"\n    path: ({match.path}:{match.start_line}-{match.end_line})"
         )
 
 
 DB_PATH = get_index_sqlite_path()
 WORKSPACE_DIR = Path.cwd()
 QUERYS = [
-    # "dfswalker", 
-    # "chunkcodebaseIndex",
-    # "_insert_or_raise",
-    # "SYMBOLLOOKUP",
-    # "sound",
-    # "update",
-    # "main",
-    # "construct_class_definition_chunk",
-    # "collapse_children",
+    "dfswalker", 
+    "chunkcodebaseIndex",
+    "_insert_or_raise",
+    "SYMBOLLOOKUP",
+    "sound",
+    "update",
+    "main",
+    "construct_class_definition_chunk",
+    "collapse_children",
+    
     # another repo symbols
+    
     # "RetrievalPipelineOptions",
     # "BaseRetrievalPipeline",
     # "retrieveContextItemsFromEmbeddings",
@@ -124,20 +127,24 @@ async def main() -> None:
             print(f"[{index}] {name!r}")
             print("=" * 88)
 
-            result = lookup.lookup(name, detail="signature")
+            result = lookup.lookup(
+                name, 
+                # detail="signature"
+            )
             _print_matches(result)
 
             # A single match is selected automatically by the API. With
             # duplicates, reconstruct each row to make selection explicit.
             if result.selected is not None:
-                print("\n  selected: unique match")
+                print("    selected: unique match\n    code:\n")
                 _print_code_tree(result.selected)
             else:
                 for match in result.matches:
-                    print(f"\n  selected explicitly: {match.id}")
+                    print(f"\n  selected explicitly: {match.id}\n  code:\n")
                     _print_code_tree(
                         lookup.reconstruct(
-                            match.id
+                            match.id,
+                            # detail="signature"
                         )
                     )
             print()

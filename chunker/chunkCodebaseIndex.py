@@ -286,6 +286,21 @@ class ChunkCodebaseIndex(CodebaseIndexer):
                     ),
                 )
                 seen.add(str(sym.id))
+                
+            # File symbols are structural roots they deliberately have no chunks.
+            orphans = [
+                s for s in symbols
+                if not s.chunk_ids and s.type != "file"
+            ]
+            if orphans:
+                # log for orphan symbols(symbols withut chunk)
+                print(f"symbols without chunks: "
+                    f"{[(str(s.id), s.name, s.type, s.filepath) for s in orphans]}")
+                
+                raise RuntimeError(
+                    f"symbols without chunks: "
+                    f"{[(str(s.id), s.name, s.type) for s in orphans]}"
+                )
 
     def insert_chunks(
         self,

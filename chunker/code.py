@@ -46,6 +46,35 @@ def _extract_signature(content: str) -> str:
     """First line of the chunk content, trimmed. Used as a lightweight signature."""
     return content.split("\n", 1)[0].strip()
 
+def _ast_signature(node: Node, code: bytes) -> str:
+    if node.type in FUNCTION_DECLARATION_NODE_TYPES:
+        body = first_child(node, FUNCTION_BLOCK_NODE_TYPES)
+        if body is None:
+            end = node.end_byte
+        else:
+            # Take the last child *before* the body; usually ':'.
+            prev = None
+            for child in node.children:
+                if child.id == body.id:
+                    break
+                prev = child
+            end = prev.end_byte if prev is not None else body.start_byte
+        return code[node.start_byte:end].rstrip().decode()
+
+    if node.type in CLASS_NODE_TYPES:
+        block = first_child(node, ["block", "class_body", "declaration_list"])
+        if block is None:
+            end = node.end_byte
+        else:
+            prev = None
+            for child in node.children:
+                if child.id == block.id:
+                    break
+                prev = child
+            end = prev.end_byte if prev is not None else block.start_byte
+        return code[node.start_byte:end].rstrip().decode()
+
+    return code[node.start_byte:node.end_byte].split(b"\n", 1)[0].strip().decode()
 
 # =============================================================================
 # Node Types
@@ -83,10 +112,169 @@ def get_method_nodes(class_node: Node) -> list[Node]:
         if child.type in FUNCTION_DECLARATION_NODE_TYPES
     ]
 
+async def _char_split(blob: bytes, max_chunk_size: int) -> list[bytes]:
+    text = blob.decode()
+    out: list[bytes] = []
+    i, n = 0, len(text)
+    while i < n:
+        lo, hi = i + 1, n
+        best = i + 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if await count_tokens_async(text[i:mid]) <= max_chunk_size:
+                best = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        out.append(text[i:best].encode())
+        i = best
+    return out
+
+
+async def _split_oversized(
+    content: bytes,
+    max_chunk_size: int,
+) -> list[bytes]:
+    """Final-resort splitter: cut a byte blob into <=budget pieces.
+
+    Used when AST-aware splitting can't make a piece fit — class overviews
+    after collapsing methods, or a single statement whose text alone exceeds
+    budget. Splits at line boundaries; falls back to character boundaries
+    for any single line that still doesn't fit.
+    """
+    if await count_tokens_async(content.decode()) <= max_chunk_size:
+        return [content]
+
+    pieces: list[bytes] = []
+    current: list[bytes] = []
+
+    for line in content.split(b"\n"):
+        candidate_lines = current + [line]
+        candidate = b"\n".join(candidate_lines)
+        if current and await count_tokens_async(candidate.decode()) > max_chunk_size:
+            pieces.append(b"\n".join(current))
+            current = [line]
+        else:
+            current = candidate_lines
+
+    if current:
+        pieces.append(b"\n".join(current))
+
+    # Any single line that alone exceeds budget: char-split it.
+    final: list[bytes] = []
+    for p in pieces:
+        if await count_tokens_async(p.decode()) <= max_chunk_size:
+            final.append(p)
+        else:
+            final.extend(await _char_split(p, max_chunk_size))
+    return final
+
+def _collect_units(
+    block: Node,
+    code: bytes,
+    collapse_types: list,
+    collapse_block_types: list,
+) -> list[bytes]:
+    """Flatten a class body into units: text runs and collapsed declarations.
+
+    Recurses into nested classes so their methods are also collapsed. Each
+    unit is small (a method sig + '...' or a run of whitespace/comments), so
+    packing units into pieces keeps every piece well under budget without
+    ever needing byte-level splitting.
+    """
+    units: list[bytes] = []
+    last_pos = block.start_byte
+    for child in block.children:
+        if child.type in collapse_types:
+            grand_child = first_child(child, collapse_block_types)
+            if grand_child is None:
+                continue
+            sig = code[child.start_byte:grand_child.start_byte]
+            repl = collapsed_replacement(grand_child)
+            if child.start_byte > last_pos:
+                units.append(code[last_pos:child.start_byte])
+            units.append(sig + repl)
+            last_pos = grand_child.end_byte
+        elif child.type in CLASS_NODE_TYPES:
+            nested_block = first_child(
+                child, ["block", "class_body", "declaration_list"]
+            )
+            if nested_block is None:
+                continue
+            if child.start_byte > last_pos:
+                units.append(code[last_pos:child.start_byte])
+            # Nested class header (e.g. "class Inner:")
+            units.append(code[child.start_byte:nested_block.start_byte])
+            # Recurse: collapse the nested class's methods too
+            units.extend(_collect_units(
+                nested_block, code, collapse_types, collapse_block_types
+            ))
+            # Nested class tail (closing brace / newline)
+            if nested_block.end_byte < child.end_byte:
+                units.append(code[nested_block.end_byte:child.end_byte])
+            last_pos = child.end_byte
+    if last_pos < block.end_byte:
+        units.append(code[last_pos:block.end_byte])
+    return units
+
+
+
+
 
 # =============================================================================
 # Class collapsing (overview chunk only)
 # =============================================================================
+
+# async def collapse_children(
+#     node: Node,
+#     code: bytes,
+#     block_types: list,
+#     collapse_types: list,
+#     collapse_block_types: list,
+#     max_chunk_size: int,
+# ) -> bytes:
+#     class_start = node.start_byte
+#     class_end = node.end_byte
+#     class_code = code[class_start:class_end]
+
+#     block = first_child(node, block_types)
+#     if block is None:
+#         return class_code
+
+#     parts: list[bytes] = []
+#     method_part_indices: list[int] = []
+
+#     last_pos = class_start
+#     for child in block.children:
+#         if child.type in collapse_types:
+#             grand_child = first_child(child, collapse_block_types)
+#             if grand_child is None:
+#                 continue
+
+#             method_sig = code[child.start_byte:grand_child.start_byte]
+#             repl = collapsed_replacement(grand_child)
+#             method_part = method_sig + repl
+
+#             if child.start_byte > last_pos:
+#                 parts.append(code[last_pos:child.start_byte])
+#             method_part_indices.append(len(parts))
+#             parts.append(method_part)
+#             last_pos = grand_child.end_byte
+
+#     if last_pos < class_end:
+#         parts.append(code[last_pos:class_end])
+
+#     collapsed = b"".join(parts)
+#     tokens = await count_tokens_async(collapsed.decode())
+
+#     # Too large: drop collapsed methods from the end until it fits.
+#     while method_part_indices and tokens > max_chunk_size:
+#         idx = method_part_indices.pop()
+#         parts.pop(idx)
+#         collapsed = b"".join(parts)
+#         tokens = await count_tokens_async(collapsed.decode())
+
+#     return collapsed
 
 async def collapse_children(
     node: Node,
@@ -95,56 +283,72 @@ async def collapse_children(
     collapse_types: list,
     collapse_block_types: list,
     max_chunk_size: int,
-) -> bytes:
+) -> list[bytes]:
+    """Collapse a class body into one or more overview pieces.
+
+    Each returned piece fits under `max_chunk_size`. The class header is
+    repeated at the top of every piece so each reads as a standalone
+    overview. Pieces are packed at unit boundaries, so no piece ever
+    breaks mid-token; the byte-level splitter is only touched if a single
+    unit is somehow still over budget.
+    """
     class_start = node.start_byte
     class_end = node.end_byte
-    class_code = code[class_start:class_end]
 
     block = first_child(node, block_types)
     if block is None:
-        return class_code
+        return [code[class_start:class_end]]
 
-    parts: list[bytes] = []
-    method_part_indices: list[int] = []
+    header = code[class_start:block.start_byte]  # "class Foo:" + newline
 
-    last_pos = class_start
-    for child in block.children:
-        if child.type in collapse_types:
-            grand_child = first_child(child, collapse_block_types)
-            if grand_child is None:
-                continue
+    units = _collect_units(block, code, collapse_types, collapse_block_types)
 
-            method_sig = code[child.start_byte:grand_child.start_byte]
-            repl = collapsed_replacement(grand_child)
-            method_part = method_sig + repl
+    # Special case: body collapsed to nothing but the header and tail.
+    if not units:
+        tail = code[block.end_byte:class_end]
+        return [header + tail]
 
-            if child.start_byte > last_pos:
-                parts.append(code[last_pos:child.start_byte])
-            method_part_indices.append(len(parts))
-            parts.append(method_part)
-            last_pos = grand_child.end_byte
+    header_tokens = await count_tokens_async(header.decode())
+    budget = max(max_chunk_size - header_tokens, 1)
 
-    if last_pos < class_end:
-        parts.append(code[last_pos:class_end])
+    pieces: list[bytes] = []
+    current: list[bytes] = []
+    current_tokens = 0
 
-    collapsed = b"".join(parts)
-    tokens = await count_tokens_async(collapsed.decode())
+    for unit in units:
+        unit_tokens = await count_tokens_async(unit.decode())
 
-    # Too large: drop collapsed methods from the end until it fits.
-    while method_part_indices and tokens > max_chunk_size:
-        idx = method_part_indices.pop()
-        parts.pop(idx)
-        collapsed = b"".join(parts)
-        tokens = await count_tokens_async(collapsed.decode())
+        # Defensive: a single unit over budget. Should be impossible after
+        # collapsing (sig + "..." is tiny), except for pathological cases
+        # like a giant class docstring. Split it at line boundaries.
+        if unit_tokens > budget:
+            if current:
+                pieces.append(header + b"".join(current))
+                current, current_tokens = [], 0
+            for sub in await _split_oversized(unit, budget):
+                pieces.append(header + sub)
+            continue
 
-    return collapsed
+        if current and current_tokens + unit_tokens > budget:
+            pieces.append(header + b"".join(current))
+            current, current_tokens = [], 0
+
+        current.append(unit)
+        current_tokens += unit_tokens
+
+    if current:
+        pieces.append(header + b"".join(current))
+
+    return pieces or [header]
+
+
 
 
 async def construct_class_definition_chunk(
     node: Node,
     code: bytes,
     max_chunk_size: int,
-) -> bytes:
+) -> list[bytes]:
     return await collapse_children(
         node,
         code,
@@ -193,6 +397,7 @@ async def _emit_body_chunks(
     max_chunk_size: int,
     func_start_line: int,
 ) -> AsyncGenerator[tuple[str, int, int], None]:
+    
     header_tokens = await count_tokens_async(header.decode())
     budget = max(max_chunk_size - header_tokens, 1)
 
@@ -215,14 +420,23 @@ async def _emit_body_chunks(
             statements[end].end_byte
         ]
         combined = header + b"\n" + span
-
-        # Every piece reports the *function's* start line.
-        yield (
-            combined.decode(),
-            func_start_line,
-            statements[end].end_point[0] + 1,
-        )
+        end_line = statements[end].end_point[0] + 1
+        
+        if await count_tokens_async(combined.decode()) <= max_chunk_size:
+            yield (combined.decode(), func_start_line, end_line)
+        else:
+            # Single statement (or group) bigger than budget.
+            for piece in await _split_oversized(combined, max_chunk_size):
+                yield (piece.decode(), func_start_line, end_line)
         i = end + 1
+
+        # # Every piece reports the *function's* start line.
+        # yield (
+        #     combined.decode(),
+        #     func_start_line,
+        #     statements[end].end_point[0] + 1,
+        # )
+        # i = end + 1
 
 
 async def split_large_function(
@@ -282,6 +496,7 @@ def _make_chonk(
     prev_chunk: UUID | None = None,
     next_chunk: UUID | None = None,
     chunk_id: UUID | None = None,
+    signature: Optional[str] = None
 ) -> Chonk:
     cid = chunk_id if chunk_id is not None else uuid4()
     symbol.chunk_ids.append(cid)
@@ -295,7 +510,7 @@ def _make_chonk(
         content=content,
         start_line=start_line,
         end_line=end_line,
-        signature=_extract_signature(content),
+        signature=signature if signature is not None else _extract_signature(content),
     )
 
 
@@ -318,8 +533,10 @@ async def walk(
     # CLASS
     # ---------------------------------------------------------------------
     if node.type in CLASS_NODE_TYPES:
+        
         name_node = first_child(node, "identifier")
-
+        sig = _ast_signature(node, code)
+        
         class_symbol = Symbol(
             id=uuid4(),
             type="class",
@@ -346,6 +563,7 @@ async def walk(
                 content=text,
                 start_line=node.start_point[0] + 1,
                 end_line=node.end_point[0] + 1,
+                signature=sig
             )
             result.chunks.append(chunk)
             yield chunk
@@ -366,17 +584,46 @@ async def walk(
         # -----------------------------------------------------------------
         # Large class → overview chunk + recursed method chunks.
         # -----------------------------------------------------------------
-        overview = await construct_class_definition_chunk(
+        # overview = await construct_class_definition_chunk(
+        #     node, code, max_chunk_size
+        # )
+        # overview_pieces = await _split_oversized(overview, max_chunk_size)
+        
+        overview_pieces = await         construct_class_definition_chunk(
             node, code, max_chunk_size
         )
-        chunk = _make_chonk(
-            class_symbol,
-            content=overview.decode(),
-            start_line=node.start_point[0] + 1,
-            end_line=node.end_point[0] + 1,
-        )
-        result.chunks.append(chunk)
-        yield chunk
+
+        class_start = node.start_point[0] + 1
+        class_end = node.end_point[0] + 1
+        chunk_ids = [uuid4() for _ in overview_pieces]
+
+        for i, piece in enumerate(overview_pieces):
+            chunk = _make_chonk(
+                class_symbol,
+                content=piece.decode(),
+                start_line=class_start,
+                end_line=class_end,
+                piece_index=i,
+                piece_count=len(overview_pieces),
+                prev_chunk=chunk_ids[i - 1] if i else None,
+                next_chunk=chunk_ids[i + 1]
+                if i < len(chunk_ids) - 1
+                else None,
+                chunk_id=chunk_ids[i],
+                signature=sig,
+            )
+            result.chunks.append(chunk)
+            yield chunk
+        
+        # chunk = _make_chonk(
+        #     class_symbol,
+        #     content=overview.decode(),
+        #     start_line=node.start_point[0] + 1,
+        #     end_line=node.end_point[0] + 1,
+        #     signature=sig
+        # )
+        # result.chunks.append(chunk)
+        # yield chunk
 
         if block:
             for child in block.children:
@@ -395,8 +642,10 @@ async def walk(
     # METHOD / FUNCTION (every one gets its own Symbol)
     # ---------------------------------------------------------------------
     if node.type in FUNCTION_DECLARATION_NODE_TYPES:
+        
         name_node = first_child(node, "identifier")
-
+        sig = _ast_signature(node, code)
+        
         func_symbol = Symbol(
             id=uuid4(),
             type="method",
@@ -419,6 +668,7 @@ async def walk(
                     content=full_text,
                     start_line=node.start_point[0] + 1,
                     end_line=node.end_point[0] + 1,
+                    signature=sig
                 )
                 result.chunks.append(chunk)
                 yield chunk
@@ -441,6 +691,7 @@ async def walk(
                         if i < len(chunk_ids) - 1
                         else None,
                         chunk_id=chunk_ids[i],
+                        signature=sig
                     )
                     result.chunks.append(chunk)
                     yield chunk
@@ -455,7 +706,7 @@ async def walk(
                     result,
                     max_chunk_size,
                     func_symbol.id,
-                    allow_chunking=False,
+                    allow_chunking=True,
                 ):
                     yield nested
         return
@@ -473,6 +724,9 @@ async def walk(
             allow_chunking,
         ):
             yield nested
+
+
+
 
 
 # =============================================================================

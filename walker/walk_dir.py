@@ -90,8 +90,6 @@ class DFSWalker:
 
     # walk is a depth-first search implementation
     async def walk(self) -> AsyncGenerator[str, None]:
-        
-        # print("here2")
         start = _now_ms()
         ignore_file_time = 0
         ignore_time = 0

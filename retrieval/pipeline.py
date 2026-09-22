@@ -211,6 +211,7 @@ class SymbolLookup:
         symbol_id: str,
         *,
         tags: Optional[Sequence[Any]] = None,
+        detail: Literal["signature", "body"] = "body",
         filter_paths: Optional[Sequence[str]] = None,
         _scope: Optional[_Scope] = None,
     ) -> SymbolCode:
@@ -224,7 +225,7 @@ class SymbolLookup:
         return self._reconstruct_for_scope(
             str(symbol_id),
             scope,
-            detail="body",
+            detail=detail,
             include_children=True,
             max_lines=0,
         )

@@ -176,6 +176,8 @@ async def chunk_document(
     for task in chunk_tasks:
         chunk = await task
         if chunk is None:
+            # log
+            print("dropping chunks because its size limit exceeds")
             continue
         yield chunk
 
