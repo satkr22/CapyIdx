@@ -220,3 +220,13 @@ __marimo__/
 .streamlit/secrets.toml
 
 
+
+# my added
+.github
+.venv
+.mypy_cache
+.ruff_cache
+.vscode
+build
+dist
+.python-version
