@@ -1,6 +1,6 @@
 # CapyIdx
 
-CoreIndexer indexes source repositories into SQLite and provides deterministic
+CapyIdx indexes source repositories into SQLite and provides deterministic
 symbol lookup and code reconstruction. It is designed to be embedded in tools
 that need repository-aware code context.
 
