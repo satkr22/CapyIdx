@@ -12,7 +12,7 @@ from utils.ignore import Ignore, default_ignore_file_and_dir, git_ig_array_from_
 from utils.uri import get_uri_to_path
 from utils.uri2 import join_paths_to_uri
 
-# Optional native backend
+#  native backend
 try:
     from watchdog.events import FileSystemEventHandler as _WatchdogEventHandlerImpl
     from watchdog.observers import Observer
@@ -20,11 +20,8 @@ try:
     _WatchdogEventHandler: Any = _WatchdogEventHandlerImpl
     _WATCHDOG_AVAILABLE = True
 except Exception:
-    # Keep optional watchdog symbols defined for static analyzers and for the
-    # class declaration below when watchdog is not installed.
     class _FallbackWatchdogEventHandler:
         """Fallback base when the optional watchdog dependency is absent."""
-
         pass
 
     _WatchdogEventHandler: Any = _FallbackWatchdogEventHandler
@@ -56,15 +53,12 @@ class FileWatcher(Protocol):
         """
         ...
 
-
-# hi 
 # ---------------------------------------------------------------------
 # Native Watchdog implementation
 # ---------------------------------------------------------------------
 
 class _WatchdogHandler(_WatchdogEventHandler):
     def __init__(self, queue: asyncio.Queue[str], loop, roots: List[str]):
-    # def __init__(self, queue: asyncio.Queue[str], loop, roots:List[str]):
         self.queue = queue
         self.loop = loop
         self.ignore = Ignore()
@@ -98,7 +92,6 @@ class _WatchdogHandler(_WatchdogEventHandler):
     def on_moved(self, event):
         self._push(event.dest_path)
 
-# hi = "this is great"
 
 class WatchdogFileWatcher:
     """
@@ -180,14 +173,11 @@ class WatchdogFileWatcher:
 
 
 # ---------------------------------------------------------------------
-# Portable polling fallback
+# polling fallback
 # ---------------------------------------------------------------------
 
 class PollingFileWatcher:
     """
-    Pure Python watcher.
-
-    No external dependency.
     Scans modification times every poll interval.
     """
 
@@ -278,19 +268,5 @@ class AutoFileWatcher:
             )
 
     async def watch(self, roots: List[str]) -> AsyncIterator[List[str]]:
-        # print("here0")
         async for files in self._impl.watch(roots):
             yield files
-        
-        
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")
-# print("here-1")

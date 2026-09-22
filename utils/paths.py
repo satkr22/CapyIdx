@@ -10,7 +10,6 @@ COREINDEXER_GLOBAL_DIR: Path = _resolve_coreIndexer_global_dir()
 
 
 def get_coreIndexer_global_path() -> Path:
-    # This is ~/.continue on mac/linux
     coreIndexer_path = COREINDEXER_GLOBAL_DIR
     if not coreIndexer_path.exists():
         coreIndexer_path.mkdir(parents=True, exist_ok=True)
@@ -47,7 +46,7 @@ async def migrate(
     if not migration_path.exists():
         try:
             print(f"Running migration: {id}")
-            migration_path.write_text("")  # marker first, matching original
+            migration_path.write_text("") 
             result = callback()
             if result is not None and hasattr(result, "__await__"):
                 await result

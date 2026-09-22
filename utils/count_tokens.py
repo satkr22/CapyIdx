@@ -1,10 +1,3 @@
-"""
-The async-encoder / worker-pool infrastructure has been removed
-(AsyncEncoder, LlamaAsyncEncoder, NonWorkerAsyncEncoder,
-autodetectTemplateType, IS_BINARY branch, llamaTokenizer fallback).
-Core token counting and message compilation logic are preserved.
-"""
-
 import math
 import json
 import asyncio
@@ -13,28 +6,13 @@ from typing import Any, Dict, List, Optional, Union
 from functools import lru_cache
 
 
-# Importing a bunch of tokenizers can be very resource intensive (MB-scale per tokenizer)
-# Using token counting APIs (e.g. for anthropic) can be complicated and unreliable in many environments
-# So for now we will just use super fast gpt-tokenizer and apply safety buffers
-# I'm using rough estimates from this article to apply safety buffers to common tokenizers
-# which will have HIGHER token counts than gpt. Roughly using token ratio from article + 10%
-# https://medium.com/@disparate-ai/not-all-tokens-are-created-equal-7347d549af4d
-
 ANTHROPIC_TOKEN_MULTIPLIER = 1.23
 GEMINI_TOKEN_MULTIPLIER = 1.18
 MISTRAL_TOKEN_MULTIPLIER = 1.26
 
 
 def _get_adjusted_token_count_from_model(base_tokens: int, model_name: str) -> int:
-    """
-    Adjusts token count based on model-specific tokenizer differences.
-    Since we use llama tokenizer (~= gpt tokenizer) for all models, we apply
-    multipliers for models known to have higher token counts.
-
-    :param base_tokens: Token count from llama/gpt tokenizer
-    :param model_name: Name of the model
-    :returns: Adjusted token count with safety buffer
-    """
+   
     multiplier = 1.0
     lower_model_name = (model_name or "").lower()
 
@@ -67,12 +45,6 @@ _gpt_encoding = None
 
 
 def _encoding_for_model(model_name: str):
-    """Return a tiktoken encoding.
-
-    The original used autodetectTemplateType() to pick between tiktoken and
-    llamaTokenizer. That branch was part of the removed infra, so we use
-    gpt-4's encoding for every model.
-    """
     global _gpt_encoding
     if _gpt_encoding is None:
         _gpt_encoding = tiktoken.encoding_for_model("gpt-4")
@@ -105,7 +77,6 @@ def count_tokens(content: MessageContent, model_name: str = "llama2") -> int:
                 try:
                     base_tokens += _count_image_tokens(part)
                 except (KeyError, TypeError):
-                    # Unknown part type — skip rather than crash.
                     pass
     else:   
         base_tokens = len(encoding.encode(content or "", disallowed_special=()))
@@ -114,17 +85,11 @@ def count_tokens(content: MessageContent, model_name: str = "llama2") -> int:
 
 
 async def count_tokens_async__(content: MessageContent, model_name: str = "llama2") -> int:
-    
-    # Delegate to the sync implementation on a worker thread so the event
-    # loop is not blocked by tiktoken's CPU-bound encode. This guarantees
-    # parity with count_tokens() — including the model-specific multiplier
-    # applied by _get_adjusted_token_count_from_model.
     return await asyncio.to_thread(count_tokens, content, model_name)
     
 @lru_cache(maxsize=32768)
 def _count_cached(text: str, model_name: str) -> int:
     if model_name == "llama2":
-        # Indexer path: no multiplier, straight cl100k count.
         return len(_encoding_for_model(model_name).encode(text, disallowed_special=()))
     return count_tokens(text, model_name)
 
@@ -134,24 +99,6 @@ async def count_tokens_async(content: MessageContent, model_name: str = "llama2"
     # List content (chat messages with parts) — rare in the indexer path.
     return await asyncio.to_thread(count_tokens, content, model_name)    
     
-    
-    
-    
-# async def count_tokens_async(content: MessageContent, model_name: str = "llama2") -> int:
-#     # Original used a worker pool for parallelism. In Python we just
-#     # delegate to the encoding directly.
-#     encoding = _encoding_for_model(model_name)
-
-#     if isinstance(content, list):
-#         total = 0
-#         for part in content:
-#             if part.get("type") == "imageUrl":
-#                 total += _count_image_tokens(part)
-#             else:
-#                 total += len(encoding.encode(part.get("text") or "", disallowed_special=()))
-#         return total
-#     return len(encoding.encode(content or "", disallowed_special=()))
-
 
 # https://community.openai.com/t/how-to-calculate-the-tokens-when-using-function-call/266573/10
 def count_tools_tokens(tools: List[Dict[str, Any]], model_name: str) -> int:

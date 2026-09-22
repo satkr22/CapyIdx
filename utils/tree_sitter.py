@@ -149,10 +149,6 @@ IGNORE_PATH_PATTERNS: Dict[LanguageName, List[re.Pattern]] = {
 # ---------------------------------------------------------------------------
 # Parser / language loading
 # ---------------------------------------------------------------------------
-
-# `Parser.init()` in web-tree-sitter is asynchronous and idempotent. In Python
-# there is no equivalent but we preserve the async surface and idempotent
-# initialisation semantics.
 _parser_initialized = False
 
 
@@ -170,8 +166,9 @@ async def get_parser_for_file(filepath: str) -> Optional[Parser]:
         if not language:
             return None
 
-        # In modern `tree_sitter` Python bindings the language is passed to the
-        # Parser constructor. Equivalent to `parser.setLanguage(language)`.
+        # In modern tree_sitter Python bindings the language is passed to the
+        # Parser constructor. Equivalent to parser.setLanguage(language).
+        
         parser = Parser()
         parser.language = language
         return parser
@@ -219,15 +216,6 @@ async def get_query_for_file(
     if not language:
         return None
 
-    # is_test = os.environ.get("NODE_ENV") == "test"
-    # base_dir = os.getcwd() if is_test else os.path.dirname(os.path.abspath(__file__))
-
-    # if is_test:
-    #     sub_dirs = ["extensions", "vscode", "tree-sitter"]
-    # else:
-    #     sub_dirs = ["tree-sitter"]
-
-    
     if not os.path.exists(query_path):
         return None
 
@@ -239,20 +227,7 @@ async def get_query_for_file(
 
 
 async def load_language_for_file_ext(file_extension: str) -> Language:
-    """
-    Original loads `tree-sitter-<lang>.wasm` from disk. In Python we load the
-    equivalent grammar via `tree_sitter_language_pack`. The language name
-    resolution and directory structure used by the TS module are preserved in
-    the comment below for reference:
 
-        wasmPath = path.join(
-            process.env.NODE_ENV === "test" ? process.cwd() : __dirname,
-            ...(process.env.NODE_ENV === "test"
-                ? ["node_modules", "tree-sitter-wasms", "out"]
-                : ["tree-sitter-wasms"]),
-            `tree-sitter-${supportedLanguages[fileExtension]}.wasm`,
-        );
-    """
     lang_name = supported_languages[file_extension]
     # `LanguageName` is a `str` enum so the raw string value is the grammar name.
     return _get_language_by_name(cast(Any, lang_name.value))
@@ -282,7 +257,7 @@ async def get_symbols_for_file(
         return None
 
     try:
-        # `tree_sitter` requires bytes input.
+        # tree_sitter requires bytes input.
         tree = parser.parse(contents.encode("utf-8"))
     except Exception:  # noqa: BLE001
         print(f"Error parsing file: {filepath}")
@@ -293,7 +268,7 @@ async def get_symbols_for_file(
     # Function to recursively find all named nodes (classes and functions)
     def find_named_nodes_recursive(node: Node) -> None:
         if node.type in GET_SYMBOLS_FOR_NODE_TYPES:
-            # Empirically, the actual name is the last identifier in the node
+            # the actual name is the last identifier in the node
             # Especially with languages where return type is declared before the name
             identifier: Optional[Node] = None
             children = node.children

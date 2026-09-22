@@ -7,8 +7,7 @@ from sentence_transformers import SentenceTransformer
 from embeddings.base import Embeddings
 
 
-# Sensible defaults per model family. max_embedding_chunk_size is in tokens
-# (matches what chunker.basic / chunker.chunk expect).
+# max_embedding_chunk_size is in tokens
 _MODEL_DEFAULTS = {
     "sentence-transformers/all-MiniLM-L6-v2": 256,
     "sentence-transformers/all-mpnet-base-v2": 384,
@@ -24,8 +23,6 @@ _DEFAULT_CHUNK_SIZE = 512
 
 class LocalEmbeddings(Embeddings):
     """Concrete Embeddings provider backed by sentence-transformers.
-
-    Satisfies the `Embeddings` Protocol structurally — no inheritance required.
     """
     
     def __init__(
@@ -49,8 +46,6 @@ class LocalEmbeddings(Embeddings):
         if not texts:
             return []
 
-        # encode() is CPU/GPU bound and releases the GIL in its C/CUDA path,
-        # so offloading to a thread keeps the event loop free.
         vectors = await asyncio.to_thread(
             self._model.encode,
             texts,

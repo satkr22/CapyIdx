@@ -52,8 +52,6 @@ class DiskOperations(FileSystem):
 
         Keys match the input paths (after normalization onlyfor lookup).
         """
-        # print("here5--disk_op")
-        # print(uris)
         return await asyncio.to_thread(self._get_file_stats_sync, [get_uri_to_path(uri) for uri in uris])
     
     async def get_branch(self, directory_uri: str) -> str:
@@ -65,7 +63,7 @@ class DiskOperations(FileSystem):
         )
     
 
-    # --- sync workers (off the event loop) --------------------------------
+    # -----------------------------------
     @staticmethod
     def _require_file_uri(uri: str) -> str:
         if not uri.startswith("file://"):
@@ -94,18 +92,13 @@ class DiskOperations(FileSystem):
         
         
     def _get_file_stats_sync(self, paths: List[str]) -> dict:
-        # Lazy import so this module stays free of indexer_types if desired
         try:
             from base.index_d import FileStats
         except ImportError:
             FileStats = None  # type: ignore
 
         result = {}
-        # print("paths---", paths)
         for raw in paths:
-            # print("here6----", raw)
-            # p = get_uri_to_path(raw)
-            # print("here7----", p)
             p = raw
             try:
                 st = os.stat(p, follow_symlinks=False)

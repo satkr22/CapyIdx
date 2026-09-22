@@ -11,7 +11,7 @@ MatchKind = Literal["exact", "substring"]
 
 @dataclass(frozen=True)
 class SymbolMatch:
-    """A row from ``symbols`` that matched the requested name."""
+    """A row from symbols that matched the requested name."""
 
     id: str
     name: str

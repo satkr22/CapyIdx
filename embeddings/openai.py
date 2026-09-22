@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-from openai import AsyncOpenAI  # pip install openai
+from openai import AsyncOpenAI 
 
 from embeddings.base import Embeddings
 

@@ -1,8 +1,8 @@
 """Deterministic symbol lookup over the SQLite index.
 
-The retrieval contract is deliberately small:
+The retrieval contract is small:
 
-* find rows in ``symbols`` by name;
+* find rows in symbols by name;
 * use case-sensitive exact, case-insensitive exact, then case-insensitive
   substring matches, in that order;
 * load chunks for an explicitly selected symbol;
@@ -37,8 +37,8 @@ class _Scope:
 class SymbolLookup:
     """Lookup and reconstruct symbols from an existing SQLite connection.
 
-    ``db`` must contain the ``symbols`` and ``chunks`` tables documented by
-    this project. Optional ``tags`` and ``filter_paths`` arguments restrict
+    db must contain the symbols and  chunks  tables documented by
+    this project. Optional  tags  and  filter_paths  arguments restrict
     the same indexed data without changing match or ordering semantics.
     """
 
@@ -49,7 +49,7 @@ class SymbolLookup:
         self._ensure_chunk_piece_index()
 
     def _ensure_chunk_piece_index(self) -> None:
-        """Best-effort index creation for the batched chunk lookup path."""
+        """index creation for the batched chunk lookup path."""
 
         try:
             exists = self.db.execute(
@@ -164,7 +164,7 @@ class SymbolLookup:
         """Find symbols and optionally reconstruct one selected symbol.
 
         When there is exactly one match it is selected automatically. With
-        multiple matches, pass its ``symbol_id`` explicitly; no implicit
+        multiple matches, pass its  symbol_id  explicitly; no implicit
         best-match choice is made.
         """
 

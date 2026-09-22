@@ -51,8 +51,6 @@ default_ignore_file_and_dir: List[str] = [
 ]
 
 
-# --- Ignore wrapper (thin) -------------------------------------------------
-# --- Ignore wrapper (thin) -------------------------------------------------
 class Ignore:
     """Chainable gitignore matcher, mirroring npm `ignore`'s used surface."""
 

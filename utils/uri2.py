@@ -1,21 +1,3 @@
-"""
-Python port of uri.ts, preserving equivalent behavior across Windows, macOS,
-and Linux.
-
-Notes on fidelity to the original TypeScript:
-- `encode_uri_component` / `decode_uri_component` replicate JavaScript's
-  encodeURIComponent / decodeURIComponent character sets exactly (the same
-  set of characters is left unescaped).
-- `urllib.parse.urlsplit` is used in place of the `uri-js` library's
-  `URI.parse`. It is a pure string-based RFC 3986 style parser (no
-  filesystem or OS calls), so it behaves identically regardless of platform.
-- `urllib.parse.urljoin` is used in place of `URI.resolve`, implementing the
-  same RFC 3986 section 5 reference-resolution algorithm.
-- Path splitting/joining uses regex on literal "\\" / "/" characters rather
-  than `os.path` or `pathlib`, so results do not vary between Windows and
-  POSIX the way `os.path` would.
-"""
-
 from __future__ import annotations
 
 import re
@@ -23,19 +5,14 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 from urllib.parse import quote, unquote, urljoin, urlsplit
 
-# Characters encodeURIComponent leaves unescaped, beyond the RFC 3986
-# "unreserved" set (letters, digits, - _ . ~) which Python's quote()
-# already always treats as safe regardless of the `safe` argument.
 _URI_COMPONENT_EXTRA_SAFE = "!*'()"
 
 
 def encode_uri_component(value: str) -> str:
-    """Equivalent to JavaScript's encodeURIComponent."""
     return quote(value, safe=_URI_COMPONENT_EXTRA_SAFE)
 
 
 def decode_uri_component(value: str) -> str:
-    """Equivalent to JavaScript's decodeURIComponent."""
     return unquote(value)
 
 
@@ -59,13 +36,11 @@ def get_clean_uri_path(uri: str) -> str:
     clean = re.sub(r"/$", "", clean)
     return clean
 
-
 @dataclass
 class FindUriInDirsResult:
     uri: str
     relative_path_or_basename: str
     found_in_dir: Optional[str]
-
 
 def find_uri_in_dirs(
     uri: str,
@@ -85,11 +60,7 @@ def find_uri_in_dirs(
 
         if uri_comps.scheme != dir_comps.scheme:
             continue
-
-        # Can't just use startswith because e.g.
-        # file:///folder/file is not within file:///fold
-
-        # At this point we break the path up and check if each dir path part matches
+        
         dir_path_parts = get_clean_uri_path(dir_uri).split("/")
 
         if len(uri_path_parts) < len(dir_path_parts):

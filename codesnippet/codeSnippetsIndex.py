@@ -190,15 +190,12 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
         )
 
     # ------------------------------------------------------------------
-    # QueryMatch → SnippetChunk
+    # QueryMatch : SnippetChunk
     # ------------------------------------------------------------------
 
     @staticmethod
     def _capture_name(query: Any, capture: Any) -> str:
         """Capture name lookup supporting both tree_sitter Python APIs.
-
-        Modern `tree_sitter` exposes `QueryCapture` objects with `.index`;
-        some builds still surface `(index, node)` tuples.
         """
         index = capture[0] if isinstance(capture, tuple) else capture.index
         return query.capture_names[index]

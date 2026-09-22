@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-import ollama  # pip install ollama
+import ollama 
 from embeddings.base import Embeddings
 
 class OllamaEmbeddings(Embeddings):

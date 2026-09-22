@@ -1,13 +1,4 @@
 from __future__ import annotations
-# try:
-#     import lancedb
-#     from lancedb import connect
-# except ImportError as e:
-#     raise ImportError(
-#         "Failed to import lancedb. If you're on a pre-Haswell x86_64 CPU, "
-#         "install the compatibility wheel: pip uninstall lancedb && pip install lancedb-compat"
-#     ) from e
-    
 
 import importlib
 import asyncio
@@ -42,13 +33,6 @@ from utils.uri import get_uri_path_basename
 from embeddings.base import Embeddings
 
 
-
-# def is_supported_lance_db_cpu_target_for_linux() -> bool:
-#     # Placeholder: assume supported. In the original TS, this checks
-#     # the CPU target on Linux for AVX2 support. We skip that check.
-#     return True
-
-
 @dataclass
 class ItemWithChunks:
     item: PathAndCacheKey
@@ -66,8 +50,6 @@ class LanceDbIndex(CodebaseIndexer):
         embeddings_provider: Embeddings,
         filesystem: FileSystem,
     ) -> Optional[LanceDbIndex]:
-        # if not is_supported_lance_db_cpu_target_for_linux():
-        #     return None
         try:
             LanceDbIndex.lance = importlib.import_module("lancedb")
             return LanceDbIndex(db, embeddings_provider, filesystem)
@@ -169,13 +151,6 @@ class LanceDbIndex(CodebaseIndexer):
         chunk_map: Dict[str, ItemWithChunks] = {}
         for item in items:
             try:
-                # do not delete these commented line # <------ critical for later use
-                # content = await self.fs.read_file(item.path)
-                # if not should_chunk(item.path, content):
-                    # continue
-                # chunks = await self.get_chunks(item, content)
-                
-                # using the chunks created by chunkCodebaseIndexer.py
                 chunks = await self.get_existing_chunks(item)
                 if not chunks:
                     continue
@@ -423,7 +398,6 @@ class LanceDbIndex(CodebaseIndexer):
         vector: List[float],
         db: Any,
     ) -> List[dict]:
-        # print(tag.directory)
         table_name = self.table_name_for_tag(tag)
         table_names = await asyncio.to_thread(db.table_names)
         if table_name not in table_names:
@@ -528,7 +502,7 @@ class LanceDbIndex(CodebaseIndexer):
                 continue
             
             dist = float(result["_distance"])
-            # Convert L2 → cosine similarity for unit-norm vectors:
+            # Convert L2 : cosine similarity for unit-norm vectors:
             cos_sim = 1.0 - (dist * dist) / 2.0
             # Clamp to [0, 1] to be safe
             cos_sim = max(0.0, min(1.0, cos_sim))

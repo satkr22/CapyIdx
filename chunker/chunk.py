@@ -1,14 +1,3 @@
-"""
-Python port of chunk.ts
-
-Preserves the behaviour of the original TypeScript chunking module,
-including:
-  * concurrent token-count verification of every chunk
-  * index assignment based on completion order (not yield order)
-  * yielding chunks in the original chunker's order, skipping any that
-    exceed maxChunkSize
-"""
-
 import asyncio
 from dataclasses import dataclass
 from typing import AsyncGenerator, List, Optional
@@ -114,9 +103,6 @@ async def chunk_document(
     max_chunk_size = param.maxChunkSize
     digest = param.digest
 
-    # `index` is a shared counter, exactly like the closure variable in TS.
-    # We read it and increment it in one synchronous step so concurrent
-    # tasks assign non-overlapping indices in completion order.
     index_box: List[int] = [0]
 
     async def _resolve_chunk(
@@ -128,16 +114,6 @@ async def chunk_document(
         
         current_index = index_box[0]
         index_box[0] += 1
-
-        # return Chunk(
-        #     content=chunk_without_id.content,
-        #     start_line=chunk_without_id.start_line,
-        #     end_line=chunk_without_id.end_line,
-        #     signature=chunk_without_id.signature,
-        #     digest=digest,
-        #     filepath=filepath,
-        #     index=current_index,
-        # )
         
         return Chunk(
                 id=chunk_without_id.id,
@@ -155,9 +131,6 @@ async def chunk_document(
                 index=current_index,
             )
 
-    # Kick off all resolve tasks eagerly, exactly like `chunkPromises.push(...)`
-    # in TS. Because we never await between creating the tasks here, every
-    # chunk's token-count check runs concurrently.
     chunk_tasks: List[asyncio.Task] = []
     async for chunk_without_id in chunk_document_without_id(
         filepath, contents, max_chunk_size
@@ -169,10 +142,6 @@ async def chunk_document(
                 asyncio.create_task(_resolve_chunk(chunk_without_id))
             )
 
-    # Iterate the tasks in creation order — matching `for await (const chunk
-    # of chunkPromises)`. Each task already ran (or is running) concurrently,
-    # so the `index` values they carry reflect completion order, while the
-    # yield order reflects the original chunker's output order.
     for task in chunk_tasks:
         chunk = await task
         if chunk is None:

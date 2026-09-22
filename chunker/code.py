@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import AsyncGenerator, Literal, Optional, Union
 from uuid import UUID, uuid4
+import logging
 
 from tree_sitter import Node
 
@@ -117,7 +118,6 @@ async def _char_split(blob: bytes, max_chunk_size: int) -> list[bytes]:
     # add logger for char spit
     print("Charater splitting triggered because any single symbol is excedding the max token bugdet.")
     
-    import logging
     logging.getLogger(__name__).warning(
         "char-split: %d bytes, first 200 chars: %r",
         len(blob), blob[:200].decode(errors="replace"),
@@ -169,15 +169,6 @@ async def _split_oversized(
         else:
             current.append(line)
             current_tokens += line_tokens + (1 if len(current) > 1 else 0)
-    
-    # for line in content.split(b"\n"):
-    #     candidate_lines = current + [line]
-    #     candidate = b"\n".join(candidate_lines)
-    #     if current and await count_tokens_async(candidate.decode()) > max_chunk_size:
-    #         pieces.append(b"\n".join(current))
-    #         current = [line]
-    #     else:
-    #         current = candidate_lines
 
     if current:
         pieces.append(b"\n".join(current))
@@ -225,13 +216,13 @@ def _collect_units(
                 continue
             if child.start_byte > last_pos:
                 units.append(code[last_pos:child.start_byte])
-            # Nested class header (e.g. "class Inner:")
+            # Nested class header
             units.append(code[child.start_byte:nested_block.start_byte])
             # Recurse: collapse the nested class's methods too
             units.extend(_collect_units(
                 nested_block, code, collapse_types, collapse_block_types
             ))
-            # Nested class tail (closing brace / newline)
+            # Nested class tail 
             if nested_block.end_byte < child.end_byte:
                 units.append(code[nested_block.end_byte:child.end_byte])
             last_pos = child.end_byte
@@ -246,58 +237,6 @@ def _collect_units(
 # =============================================================================
 # Class collapsing (overview chunk only)
 # =============================================================================
-
-# async def collapse_children(
-#     node: Node,
-#     code: bytes,
-#     block_types: list,
-#     collapse_types: list,
-#     collapse_block_types: list,
-#     max_chunk_size: int,
-# ) -> bytes:
-#     class_start = node.start_byte
-#     class_end = node.end_byte
-#     class_code = code[class_start:class_end]
-
-#     block = first_child(node, block_types)
-#     if block is None:
-#         return class_code
-
-#     parts: list[bytes] = []
-#     method_part_indices: list[int] = []
-
-#     last_pos = class_start
-#     for child in block.children:
-#         if child.type in collapse_types:
-#             grand_child = first_child(child, collapse_block_types)
-#             if grand_child is None:
-#                 continue
-
-#             method_sig = code[child.start_byte:grand_child.start_byte]
-#             repl = collapsed_replacement(grand_child)
-#             method_part = method_sig + repl
-
-#             if child.start_byte > last_pos:
-#                 parts.append(code[last_pos:child.start_byte])
-#             method_part_indices.append(len(parts))
-#             parts.append(method_part)
-#             last_pos = grand_child.end_byte
-
-#     if last_pos < class_end:
-#         parts.append(code[last_pos:class_end])
-
-#     collapsed = b"".join(parts)
-#     tokens = await count_tokens_async(collapsed.decode())
-
-#     # Too large: drop collapsed methods from the end until it fits.
-#     while method_part_indices and tokens > max_chunk_size:
-#         idx = method_part_indices.pop()
-#         parts.pop(idx)
-#         collapsed = b"".join(parts)
-#         tokens = await count_tokens_async(collapsed.decode())
-
-#     return collapsed
-
 async def collapse_children(
     node: Node,
     code: bytes,
@@ -422,38 +361,7 @@ async def _emit_body_chunks(
     
     header_tokens = await count_tokens_async(header.decode())
     budget = max(max_chunk_size - header_tokens, 1)
-
-    # i = 0
-    # while i < len(statements):
-    #     start = i
-    #     end = i
-
-    #     while end + 1 < len(statements):
-    #         span = code[
-    #             statements[start].start_byte :
-    #             statements[end + 1].end_byte
-    #         ]
-    #         if await count_tokens_async(span.decode()) > budget:
-    #             break
-    #         end += 1
-
-    #     span = code[
-    #         statements[start].start_byte :
-    #         statements[end].end_byte
-    #     ]
-    #     combined = header + b"\n" + span
-    #     end_line = statements[end].end_point[0] + 1
-        
-    #     if await count_tokens_async(combined.decode()) <= max_chunk_size:
-    #         yield (combined.decode(), func_start_line, end_line)
-    #     else:
-    #         # Single statement (or group) bigger than budget.
-    #         for piece in await _split_oversized(combined, max_chunk_size):
-    #             yield (piece.decode(), func_start_line, end_line)
-    #     i = end + 1
-    
-    
-    
+  
     i = 0
     while i < len(statements):
         start = i
@@ -483,14 +391,6 @@ async def _emit_body_chunks(
             for piece in await _split_oversized(combined, max_chunk_size):
                 yield (piece.decode(), func_start_line, end_line)
         i = end + 1
-
-        # # Every piece reports the *function's* start line.
-        # yield (
-        #     combined.decode(),
-        #     func_start_line,
-        #     statements[end].end_point[0] + 1,
-        # )
-        # i = end + 1
 
 
 async def split_large_function(
@@ -572,7 +472,7 @@ def _make_chonk(
 # Repository Intelligence Walker
 # =============================================================================
 # Async generator yielding Chonk as chunks are produced.
-# Symbol graph (with children + chunk_ids) is built into `result`.
+# Symbol graph (with children + chunk_ids) is built into result.
 
 async def walk(
     node: Node,
@@ -638,11 +538,6 @@ async def walk(
         # -----------------------------------------------------------------
         # Large class → overview chunk + recursed method chunks.
         # -----------------------------------------------------------------
-        # overview = await construct_class_definition_chunk(
-        #     node, code, max_chunk_size
-        # )
-        # overview_pieces = await _split_oversized(overview, max_chunk_size)
-        
         overview_pieces = await         construct_class_definition_chunk(
             node, code, max_chunk_size
         )
@@ -668,16 +563,6 @@ async def walk(
             )
             result.chunks.append(chunk)
             yield chunk
-        
-        # chunk = _make_chonk(
-        #     class_symbol,
-        #     content=overview.decode(),
-        #     start_line=node.start_point[0] + 1,
-        #     end_line=node.end_point[0] + 1,
-        #     signature=sig
-        # )
-        # result.chunks.append(chunk)
-        # yield chunk
 
         if block:
             for child in block.children:
@@ -760,13 +645,13 @@ async def walk(
                     result,
                     max_chunk_size,
                     func_symbol.id,
-                    allow_chunking=True,
+                    allow_chunking=True, # allow nested functions to get their own chunks
                 ):
                     yield nested
         return
 
     # ---------------------------------------------------------------------
-    # Other nodes → DFS
+    # Other nodes - DFS
     # ---------------------------------------------------------------------
     for child in node.children:
         async for nested in walk(
@@ -786,8 +671,8 @@ async def walk(
 # =============================================================================
 # Entry Point
 # =============================================================================
-# Yields Chonk (with every field populated, incl. signature).
-# Populates `result` with the full symbol graph (children + chunk_ids).
+# Yields Chonk (with every field populated including signature)
+# Populates result with the full symbol graph (children + chunk_ids).
 
 async def code_chunker(
     filepath: str,

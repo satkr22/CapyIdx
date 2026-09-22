@@ -1,4 +1,3 @@
-# utils/uri.py
 from urllib.parse import quote, urljoin, unquote, urlparse, urlsplit
 import os
 import re
@@ -21,12 +20,6 @@ def join_paths_to_uri(uri: str, *path_segments: str) -> str:
 
 
 def get_uri_file_extension(filepath: str) -> str:
-    """Return the lowercase file extension without the leading dot.
-
-    Mirrors the behaviour of `getUriFileExtension` from `./uri` in the original
-    module: the values returned are used directly as keys into
-    `supportedLanguages`, which are dot-less and lowercase.
-    """
     basename = os.path.basename(filepath)
     if "." not in basename:
         return ""
@@ -51,8 +44,6 @@ def get_clean_uri_path(uri: str) -> str:
 def get_uri_path_basename(uri: str) -> str:
     path = get_clean_uri_path(uri)
     basename = path.split("/")[-1] if path.split("/") else ""
-    # `path.split("/")` always returns at least one element (possibly ""),
-    # so `[-1]` matches JS `pop() || ""`.
     basename = basename or ""
     return unquote(basename)
     
@@ -74,19 +65,16 @@ def get_uri_to_path(uri: str) -> str:
     return p
 
 
-# -------new--------
 
 
 _URI_COMPONENT_EXTRA_SAFE = "!*'()"
 
 
 def encode_uri_component(value: str) -> str:
-    """Equivalent to JavaScript's encodeURIComponent."""
     return quote(value, safe=_URI_COMPONENT_EXTRA_SAFE)
 
 
 def decode_uri_component(value: str) -> str:
-    """Equivalent to JavaScript's decodeURIComponent."""
     return unquote(value)
 
 @dataclass
@@ -115,10 +103,6 @@ def find_uri_in_dirs(
         if uri_comps.scheme != dir_comps.scheme:
             continue
 
-        # Can't just use startswith because e.g.
-        # file:///folder/file is not within file:///fold
-
-        # At this point we break the path up and check if each dir path part matches
         dir_path_parts = get_clean_uri_path(dir_uri).split("/")
 
         if len(uri_path_parts) < len(dir_path_parts):

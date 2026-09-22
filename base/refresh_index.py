@@ -1,7 +1,5 @@
 """Refresh / catalog logic for the codebase indexer.
-
-
-Same behaviour: tag_catalog + global_cache + four-list ops + IndexLock.
+tag_catalog + global_cache + four-list ops + IndexLock.
 """
 
 from __future__ import annotations
@@ -74,25 +72,6 @@ def _map_result_type(result_type: IndexResultType) -> AddRemoveResultType:
     raise ValueError(f"Unexpected result type: {result_type}")
 
 
-# ---------------------------------------------------------------------------
-# tag_catalog reads / add-remove planning
-# ---------------------------------------------------------------------------
-
-# def get_saved_items_for_tag(
-#     tag: IndexTag,
-# ) -> list[tuple[str, str, int]]:
-#     """Return (path, cache_key, last_updated) rows for a tag."""
-#     db = SqliteDB.get()
-#     rows = db.execute(
-#         """
-#         SELECT path, cacheKey, lastUpdated FROM tag_catalog
-#         WHERE dir = ? AND branch = ? AND artifactId = ?
-#         """,
-#         (tag.directory, tag.branch, tag.artifact_id),
-#     ).fetchall()
-#     return [(r["path"], r["cacheKey"], r["lastUpdated"]) for r in rows]
-
-
 def get_saved_items_for_tag(
     tag: IndexTag,
     only_paths: Optional[set[str]] = None,
@@ -104,7 +83,7 @@ def get_saved_items_for_tag(
     """
     db = SqliteDB.get()
     if only_paths is not None:
-        # SQLite has a practical limit on the number of variables (~999 by
+        # SQLite has a practical limit on the number of variables 999 by
         # default). Single-file refresh always has |only_paths| == 1, so
         # this is fine. If you ever pass thousands of paths, batch them.
         paths = list(only_paths)
@@ -150,9 +129,7 @@ async def get_add_remove_for_tag(
         if stats.size <= MAX_FILE_SIZE_BYTES
     }
 
-    # saved = get_saved_items_for_tag(tag)
     saved = get_saved_items_for_tag(tag, only_paths=only_paths)
-    # print(f"[planner] tag={tag.artifact_id} only_paths={only_paths} saved_rows={len(saved)}")
 
     update_new_version: list[PathAndCacheKey] = []
     update_old_version: list[PathAndCacheKey] = []
@@ -162,8 +139,6 @@ async def get_add_remove_for_tag(
     # Group saved rows by path
     path_groups: dict[str, dict] = {}
     for path, cache_key, last_updated in saved:
-        # if only_paths is not None and path not in only_paths:
-        #     continue          # ignore everything outside the requested scope
         if path not in path_groups:
             path_groups[path] = {
                 "latest": {"last_updated": last_updated, "cache_key": cache_key},

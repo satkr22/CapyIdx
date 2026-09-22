@@ -1,19 +1,3 @@
-"""
-Python port of FullTextSearchCodebaseIndex.ts.
-
-Preserves behaviour:
-    - FTS5 virtual table with trigram tokenizer
-    - fts_metadata table linking to chunks
-    - update(): compute / add_tag / remove_tag / delete
-    - retrieve(): tag + path filtered BM25 search
-    - path_weight_multiplier = 10.0
-    - relative_expected_time = 0.2
-    - artifact_id = "sqliteFts"
-
-Assumes the underlying sqlite3.Connection has
-row_factory = sqlite3.Row (which SqliteDB.get() sets).
-"""
-
 from __future__ import annotations
 
 import math
@@ -54,7 +38,6 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
     def __init__(self, db: sqlite3.Connection):
         self.db = db
         self.db.row_factory = sqlite3.Row # safe to set again
-        # self._create_tables()
 
     # ------------------------------------------------------------------ #
     # Schema
@@ -97,7 +80,7 @@ class FullTextSearchCodebaseIndex(CodebaseIndexer):
         mark_complete: MarkCompleteCallback,
     ) -> AsyncIterator[IndexingProgressUpdate]:
         
-        self._create_tables()  # more defenside '_create_tables' here as it re-asserts the correct schema of table for every run
+        self._create_tables()  
         total_compute = len(results.compute)
 
         # Compute ---------------------------------------------------- #

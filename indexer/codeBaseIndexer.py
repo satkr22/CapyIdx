@@ -10,16 +10,13 @@ import time
 from pathlib import Path
 from typing import (
     AsyncGenerator,
-    # Callable,
     List,
     Optional,
     Sequence,
-    # Set,
 )
 from urllib.parse import unquote, urlparse
 
 from base.index_d import (
-    # ContextIndexingType,
     FileSystem,
     FileStatsMap,
     IndexingProgressUpdate,
@@ -64,7 +61,7 @@ _ERRORS_TO_CLEAR_INDEXES_ON = [
 # ---------------------------------------------------------------------------
 
 class PauseToken:
-    """Simple mutable pause flag (mirrors TS PauseToken)."""
+    """pause flag """
 
     def __init__(self, paused: bool = False) -> None:
         self._paused = paused
@@ -79,7 +76,7 @@ class PauseToken:
 
 
 class CancellationToken:
-    """Lightweight abort signal for long-running index runs."""
+    """abort signal for long-running index runs."""
 
     def __init__(self) -> None:
         self._cancelled = False
@@ -212,18 +209,6 @@ class CodeIndexer:
 
         if self._file_token:
             self._file_token.cancel()
-
-    # ------------------------------------------------------------------
-    # Index construction (getIndexesToBuild equivalent)
-    # ------------------------------------------------------------------
-    # async def start_watch(
-    # self,
-    # workspace_dirs: list[str],
-    # ):
-    #     watcher = self.watcher.watch(workspace_dirs)
-    #     async for changed_files in watcher:
-    #         async for update in self.refresh_codebase_index_files(changed_files):
-    #             yield update
     
     async def start_watch(
         self,
@@ -237,8 +222,6 @@ class CodeIndexer:
         pending: set[str] = set()
         watcher = self.watcher.watch(workspace_dirs)
 
-        # We need to pump the watcher and the timer concurrently.
-        # Use a helper task that fills `pending` from the watcher.
         async def _fill():
             async for batch in watcher:
                 pending.update(batch)
@@ -360,7 +343,7 @@ class CodeIndexer:
             await asyncio.sleep(0.1)
 
     # ------------------------------------------------------------------
-    # Error → progress
+    # Error : progress
     # ------------------------------------------------------------------
 
     def _error_to_progress_update(self, err: BaseException) -> IndexingProgressUpdate:
@@ -470,14 +453,12 @@ class CodeIndexer:
             )
 
             try:
-                # print("reading")
                 results, last_updated, mark_complete, mark_last_updated = await get_compute_delete_add_remove(
                     tag,
                     dict(stats),
                     self.fs.read_file,
                     repo_name,
                 )
-                # print("here5")
                 total_ops = self._total_index_ops(results)
                 completed_ops = 0
 
@@ -504,11 +485,6 @@ class CodeIndexer:
                                 + len(sub.remove_tag)
                             )
                             
-                            # progress = (
-                            #     (completed_index_count + completed_ops / total_ops)
-                            #     * (1.0 / len(indexes))
-                            # )
-                            
                             current_weight = weights[index_idx]
 
                             progress = (
@@ -517,7 +493,6 @@ class CodeIndexer:
                             ) / total_weight
                             
                         except Exception as err:
-                            # Non-fatal per-batch: record warning and continue.
                             friendly = self._friendly_index_name(
                                 codebase_index.artifact_id
                             )
@@ -542,16 +517,12 @@ class CodeIndexer:
                     last_updated,
                     IndexResultType.UPDATE_LAST_UPDATED,
                 )
-                # completed_index_count += 1
-                # progress = completed_index_count * (1.0 / len(indexes))
                 completed_weight += weights[index_idx]
                 progress = completed_weight / total_weight
 
             except Exception as err:
                 friendly = self._friendly_index_name(codebase_index.artifact_id)
                 warnings.append(f"{friendly}: {err}")
-                # completed_index_count += 1
-                # progress = completed_index_count * (1.0 / len(indexes))
                 
                 completed_weight += weights[index_idx]
                 progress = completed_weight / total_weight
@@ -565,7 +536,7 @@ class CodeIndexer:
             )
 
     # ------------------------------------------------------------------
-    # Public: refresh whole directories
+    # refresh whole directories
     # ------------------------------------------------------------------
 
     async def refresh_dirs(
@@ -601,11 +572,6 @@ class CodeIndexer:
             yield upd
             return
 
-        # yield IndexingProgressUpdate(
-        #     progress=progress, desc="Starting indexing", status="loading"
-        # )
-
-        # Touch git early so we don't sit at 0 % waiting for it later.
         try:
             await self.fs.get_repo_name(dirs[0])
         except Exception:
@@ -618,12 +584,9 @@ class CodeIndexer:
         collected_warnings: List[str] = []
 
         try:
-            # print(type(dirs))
             for directory in dirs:
                 token.throw_if_cancelled()
-                # print(directory)
                 dir_basename = get_uri_path_basename(directory)
-                # print("----", dir_basename)
                 yield IndexingProgressUpdate(
                     progress=progress,
                     desc=f"Discovering files in {dir_basename}...",
@@ -631,17 +594,12 @@ class CodeIndexer:
                 )
 
                 directory_files: List[str] = []
-                # print("here3")
-                # walk_dir currently typed against DiskOperations; FileSystem
-                # implementations that match the protocol work at runtime.
                 async for p in walk_dir_async(
                     directory,
                     self.fs,  # type: ignore[arg-type]
                     WalkerOptions(source="codebase indexing: refresh dirs"),
                 ):
-                    # print("here4")
                     directory_files.append(p)
-                    # print(p)
                     if token.cancelled:
                         upd = IndexingProgressUpdate(
                             progress=0.0,
@@ -658,7 +616,6 @@ class CodeIndexer:
 
                 branch = await self.fs.get_branch(directory)
                 repo_name = await self.fs.get_repo_name(directory)
-                # print("--------", repo_name)
                 async for update in self._index_files(
                     directory, directory_files, branch, repo_name
                 ):
@@ -705,12 +662,9 @@ class CodeIndexer:
             upd = self._handle_error(err)
             self._state = upd
             yield upd
-        # finally:
-        #     if self._active_cancellation is token:
-        #         self._active_cancellation = None
-
+            
     # ------------------------------------------------------------------
-    # Public: single-file / multi-file refresh
+    # single-file / multi-file refresh
     # ------------------------------------------------------------------
 
     async def refresh_file(
@@ -736,14 +690,11 @@ class CodeIndexer:
         repo_name = await self.fs.get_repo_name(found_in_dir)
         indexes = await self.get_indexes_to_build()
         stats = await self.fs.get_file_stats([file])
-        # print(f"[refresh_file] file={file!r} stats_keys={list(stats.keys())!r}")
 
         if stats:
             file_path = next(iter(stats.keys()))
-            # print(f"[refresh_file] taking stats branch → {file_path!r}")
         else:
             file_path = get_uri_to_path(file)
-            # print(f"[refresh_file] taking fallback branch → {file_path!r}")
             
         for index in indexes:
             token.throw_if_cancelled()
@@ -752,7 +703,6 @@ class CodeIndexer:
                 branch=branch,
                 artifact_id=index.artifact_id,
             )
-            # Pass the path even when stats is empty so the planner sees a deletion
             only = {file_path}
             
             full_results, full_last_updated, mark_complete, mark_last_updated = (
@@ -824,7 +774,7 @@ class CodeIndexer:
             yield self._handle_error(err)
 
     # ------------------------------------------------------------------
-    # High-level entry points with lock (mirrors refreshCodebaseIndexer)
+    # High-level entry points with lock
     # ------------------------------------------------------------------
 
     async def refresh_codebase_index(

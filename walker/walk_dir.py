@@ -288,9 +288,7 @@ async def walk_dir_async(
     option_overrides: Optional[WalkerOptions] = None,
 ) -> AsyncGenerator[str, None]:
     options = _resolve_options(option_overrides)
-    # print("here1")
     async for p in DFSWalker(uri, diskop, options).walk():
-        # print("here3")
         yield p
 
 
@@ -342,31 +340,20 @@ async def get_ignore_context(
 
     async def get_git_ignore_patterns():
         if git_ignore_file:
-            # contents = await diskop.read_file(f"{current_dir}/.gitignore")
             contents = await diskop.read_file(join_paths_to_uri(current_dir, ".gitignore"))
             return git_ig_array_from_file(contents)
         return []
 
-    # async def get_continue_ignore_patterns():
-    #     if continue_ignore_file:
-    #         contents = await diskop.read_file(f"{current_dir}/.continueignore")
-    #         return git_ig_array_from_file(contents)
-    #     return []
-
     ignore_arrays = await asyncio.gather(
         get_git_ignore_patterns(),
-        # get_continue_ignore_patterns(),
     )
 
     if len(ignore_arrays[0]) == 0:
         return default_and_global_ignores
 
-    # Note precedence here!
+    # Note: precedence here
     ignore_context = Ignore()
     ignore_context.add(ignore_arrays[0])            # gitignore
-    ignore_context.add(default_and_global_ignores)  # default file/folder ignores
-                                                    # followed by global
-                                                    # .continueignore - combined
-                                                    # for speed
-    # ignore_context.add(ignore_arrays[1])            # local .continueignore
+    ignore_context.add(default_and_global_ignores)  # default file/folder ignores,  followed by global
+    
     return ignore_context
