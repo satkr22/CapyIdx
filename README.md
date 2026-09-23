@@ -3,8 +3,8 @@
 CapyIdx indexes source repositories into SQLite and provides deterministic
 symbol lookup and code reconstruction. It is designed to be embedded in tools
 that need repository-aware code context. It has incremental re-indexing feature
-that re-indexes only modified  or deletedd (deteles indexes of deleted file) files.
-It looks for files which are modified and after a set interval(default=5 sec (modifiable)) it re-indexes them.
+that re-indexes only modified  or deleted (deteles indexes of deleted file) files.
+It looks for files which are modified and after a set interval(default=5 sec) it re-indexes them.
 
 ## Installation
 
