@@ -1,1 +1,1 @@
-# CoreIndexer - Complete automated indexing solution for repositories/directories.
+# CapyIdx - Complete automated indexing solution for repositories/directories.
