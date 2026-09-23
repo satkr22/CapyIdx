@@ -5,6 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "capyidx"
 version = "0.1.2"
+authors = [
+  { name = "Satyam Kumar", email = "satkr2208@gmail.com" }
+]
 description = "Codebase indexing with incremental re-indexing and deterministic symbol lookup for repositories."
 readme = "README.md"
 requires-python = ">=3.10"
