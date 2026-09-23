@@ -1,12 +1,12 @@
 """
-CoreIndexer — index a codebase, look up symbols by name.
+CapyIdx — index a codebase, look up symbols by name.
 
 The public surface is re-exported here so consumers can write::
 
-    from coreindexer import index_repo, lookup_symbol, resolve_lookup
+    from capyidx import index_repo, lookup_symbol, resolve_lookup
 
 rather than reaching into submodules. Everything documented in
-:mod:`coreindexer.api` is available from the package root.
+:mod:`capyidx.api` is available from the package root.
 """
 from __future__ import annotations
 

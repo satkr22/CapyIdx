@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "capyidx"
-version = "0.1.0"
-description = "Codebase indexing and deterministic symbol lookup for repositories."
+version = "0.1.1"
+description = "Codebase indexing with incremental re-indexing and deterministic symbol lookup for repositories."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -67,9 +67,12 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-coreindexer = ["utils/tree_sitter_queries/*.scm"]
+capyidx = ["utils/tree_sitter_queries/*.scm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-# anyio = "auto"
+
+[project.urls]
+Homepage = "https://github.com/satkr22/CapyIdx"
+Repository = "https://github.com/satkr22/CapyIdx"

@@ -4,12 +4,12 @@ from typing import Callable, Awaitable, Union, Optional
 import hashlib
 from capyidx.base.index_d import BranchAndDir
 
-DEFAULT_HOME_NAME = ".coreIndexer"
+DEFAULT_HOME_NAME = ".capyIdx"
 DEFAULT_INDEX_DIR = ".codebase_index"
 
 def home() -> Path:
-    """Root data dir. Overridable with COREINDEXER_HOME."""
-    env = os.environ.get("COREINDEXER_HOME")
+    """Root data dir. Overridable with CAPYIDX_HOME."""
+    env = os.environ.get("CAPYIDX_HOME")
     return Path(env).expanduser().resolve() if env else Path.home() / DEFAULT_HOME_NAME
 
 

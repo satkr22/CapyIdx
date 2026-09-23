@@ -2,7 +2,9 @@
 
 CapyIdx indexes source repositories into SQLite and provides deterministic
 symbol lookup and code reconstruction. It is designed to be embedded in tools
-that need repository-aware code context.
+that need repository-aware code context. It has incremental re-indexing feature
+that re-indexes only modified  or deletedd (deteles indexes of deleted file) files.
+It looks for files which are modified and after a set interval(default=5 sec (modifiable)) it re-indexes them.
 
 ## Installation
 
@@ -61,7 +63,7 @@ async for update in index_repo_iter("/path/to/git/repository"):
 ```
 
 Pass `watch=True` to continue indexing changed files after the initial pass.
-The watcher uses `watchdog` when installed and otherwise falls back to polling.
+The watcher uses `watchdog`(recommended) when installed and otherwise falls back to polling.
 
 ## Query workflows
 
@@ -81,8 +83,8 @@ deterministic symbol retrieval. FTS, code-snippet, embedding, and LanceDB
 backends are present as lower-level components but are not automatically wired
 into `index_repo` yet.
 
-Indexes are stored under `~/.coreIndexer/.codebase_index` by default. Set
-`COREINDEXER_HOME` to use a different data directory.
+Indexes are stored under `~/.capyidx/.codebase_index` by default. Set
+`CAPYIDX_HOME` to use a different data directory.
 
 ## Development checks
 

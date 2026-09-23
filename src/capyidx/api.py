@@ -1,5 +1,5 @@
 """
-Public API for CoreIndexer.
+Public API for CapyIdx.
 
 Two workflows:
 
@@ -266,7 +266,7 @@ async def lookup_symbol(
         ...     "/path/to/repo", "SymbolLookup", detail="signature"
         ... )
         >>> for m in result.matches:
-        ...     print(f"{m.type:8} {m.name:30} {m.path}:{m.start_line}")
+        ...     print(f"{m.type:8} {m.name:30} {m.path}:{m.start_line}-{m.end_line}")
     """
     async with open_lookup(repo) as lk:
         return lk.lookup(name, symbol_id=symbol_id, detail=detail, filter_paths=filter_paths, include_children=include_children, max_lines=max_lines)
@@ -296,6 +296,19 @@ async def reconstruct_symbol(
 
     Returns:
         The reconstructed :class:`SymbolCode`.
+        
+    Example:
+            >>> result = await lookup_symbol(
+            ...     "/path/to/repo", "SymbolLookup", detail="signature"
+            ... )
+            >>> for m in result.matches:
+            ...     print(f"{m.type:8} {m.name:30} {m.path}:{m.start_line}-{m.end_line}")
+            
+            >>>     symbol_code = await reconstruct_symbol(
+            ...         "/path/to/repo", m.id, detail="signature"
+            ...     )
+            ...     print(f"Code:\n{symbol_code.code}")
+    
     """
     async with open_lookup(repo) as lk:
         return lk.reconstruct(symbol_id, detail=detail, filter_paths=filter_paths)
@@ -352,7 +365,8 @@ async def resolve_lookup(
     Example:
         >>> r = await resolve_lookup("/path/to/repo", "SymbolLookup")
         >>> for code in r.codes:
-        ...     print(code.path, code.start_line, "→", len(code.body), "lines")
+        ...     print(code.path, code.start_line, "->", len(code.code), "lines")
+        ...     print(f"Code:\n{code.code}")
     """
     async with open_lookup(repo) as lk:
         result = lk.lookup(name=name, detail=detail, filter_paths=filter_paths, symbol_id=symbol_id, include_children=include_children, max_lines=max_lines)
