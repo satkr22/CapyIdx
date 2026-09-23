@@ -25,7 +25,7 @@ def test_package_exports_documented_public_api() -> None:
 
 
 def test_package_data_contains_tree_sitter_queries() -> None:
-    query = files("coreindexer").joinpath("utils").joinpath(
+    query = files("capyidx").joinpath("utils").joinpath(
         "tree_sitter_queries"
     ).joinpath("python.scm")
 

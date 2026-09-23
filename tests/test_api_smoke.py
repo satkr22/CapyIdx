@@ -26,9 +26,9 @@ def test_public_api_indexes_and_retrieves_a_symbol(
         [
             "git",
             "-c",
-            "user.name=CoreIndexer Smoke Test",
+            "user.name=CapyIdx Smoke Test",
             "-c",
-            "user.email=coreindexer-smoke@example.invalid",
+            "user.email=capyidx-smoke@example.invalid",
             "commit",
             "--quiet",
             "--no-gpg-sign",
@@ -40,9 +40,9 @@ def test_public_api_indexes_and_retrieves_a_symbol(
     )
 
     # The public API derives the current branch from the process directory and
-    # writes indexes under COREINDEXER_HOME, so keep both local to this test.
+    # writes indexes under CAPYIDX_HOME, so keep both local to this test.
     monkeypatch.chdir(repo)
-    monkeypatch.setenv("COREINDEXER_HOME", str(tmp_path / "coreindexer-home"))
+    monkeypatch.setenv("CAPYIDX_HOME", str(tmp_path / "capyidx-home"))
 
     async def smoke() -> None:
         updates = [

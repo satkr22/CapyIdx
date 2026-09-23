@@ -65,8 +65,9 @@ class _WatchdogHandler(_WatchdogEventHandler):
         self.ignore.add(default_ignore_file_and_dir)
         for root in roots:
             p = join_paths_to_uri(root, ".gitignore")
-            if Path(p).exists:
-                self.ignore.add(git_ig_array_from_file_path(p))
+            local_path = get_uri_to_path(p)
+            if Path(local_path).exists():
+                self.ignore.add(git_ig_array_from_file_path(local_path))
 
     def _push(self, path: str):
         if os.path.isdir(path):
