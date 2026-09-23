@@ -24,7 +24,7 @@ from capyidx.base.index_d import(
     FileSystem
 )
 from capyidx.utils.disk_operations import DiskOperations
-from capyidx.utils.uri import get_uri_file_extension
+from capyidx.utils.uri1 import get_uri_file_extension
 
 
 # ---------------------------------------------------------------------------
