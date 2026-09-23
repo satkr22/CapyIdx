@@ -9,7 +9,7 @@ from tree_sitter import Node
 
 from capyidx.base.index_d import ChunkingResult, Symbol, Chonk
 from capyidx.utils.count_tokens import count_tokens_async
-from capyidx.utils.tree_sitter import get_parser_for_file
+from capyidx.utils.tree_sitter_utils import get_parser_for_file
 
 
 # =============================================================================

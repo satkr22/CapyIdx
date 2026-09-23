@@ -10,7 +10,7 @@ from typing import (
     Tuple,
 )
 
-from capyidx.utils.uri import join_paths_to_uri
+from capyidx.utils.uri1 import join_paths_to_uri
 from capyidx.utils.ignore import Ignore, default_ignore_file_and_dir, git_ig_array_from_file
 from capyidx.utils.disk_operations import DiskOperations, FileType
 

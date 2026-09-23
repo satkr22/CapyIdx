@@ -9,7 +9,7 @@ from typing import Any, AsyncIterator, List, Protocol, Set
 from urllib.parse import quote
 
 from capyidx.utils.ignore import Ignore, default_ignore_file_and_dir, git_ig_array_from_file_path
-from capyidx.utils.uri import get_uri_to_path
+from capyidx.utils.uri1 import get_uri_to_path
 from capyidx.utils.uri2 import join_paths_to_uri
 
 #  native backend

@@ -24,7 +24,7 @@ from capyidx.base.index_types import (
 )
 from capyidx.chunker.chunk import chunk_document, ChunkDocumentParam, should_chunk
 from capyidx.utils.chunk_utils import tag_to_string
-from capyidx.utils.uri import get_uri_path_basename
+from capyidx.utils.uri1 import get_uri_path_basename
 
 
 class ChunkCodebaseIndex(CodebaseIndexer):

@@ -9,7 +9,7 @@ from typing import List, Tuple, Optional
 from capyidx.base.index_d import FileSystem, FileType
 from urllib.parse import quote, unquote, urlparse
 
-from capyidx.utils.uri import get_uri_to_path, get_path_to_uri
+from capyidx.utils.uri1 import get_uri_to_path, get_path_to_uri
 
 Entry = Tuple[str, FileType]
 

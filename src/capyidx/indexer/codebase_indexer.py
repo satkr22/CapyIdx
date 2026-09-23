@@ -33,7 +33,7 @@ from capyidx.base.index_types import (
 from capyidx.base.refresh_index import IndexLock, get_compute_delete_add_remove
 from capyidx.walker.walk_dir import WalkerOptions, walk_dir_async
 from capyidx.watcher.file_watcher import FileWatcher, AutoFileWatcher
-from capyidx.utils.uri import get_uri_path_basename, get_uri_to_path
+from capyidx.utils.uri1 import get_uri_path_basename, get_uri_to_path
 from capyidx.utils.disk_operations import DiskOperations
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, Optional, List, Dict, Tuple
 import sqlite3
 from tree_sitter import QueryCursor, Node, Query
 
-import capyidx.utils.tree_sitter as _utils_tree_sitter
+import capyidx.utils.tree_sitter_utils as _utils_tree_sitter
 from capyidx.base.index_d import (
     FileSystem,
     IndexTag,
@@ -23,12 +23,12 @@ from capyidx.base.index_types import (
 )
 from capyidx.utils.chunk_utils import tag_to_string
 from capyidx.utils.paths import migrate
-from capyidx.utils.tree_sitter import (
+from capyidx.utils.tree_sitter_utils import (
     get_full_language_name,
     get_parser_for_file,
     get_query_for_file,
 )
-from capyidx.utils.uri import (
+from capyidx.utils.uri1 import (
     find_uri_in_dirs,
     get_last_n_path_parts,
     get_last_n_uri_relative_path_parts,

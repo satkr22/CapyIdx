@@ -28,7 +28,7 @@ from capyidx.chunker.basic import basic_chunker
 from capyidx.chunker.chunk import ChunkDocumentParam, chunk_document, should_chunk
 from capyidx.utils.chunk_utils import tag_to_string
 from capyidx.utils.paths import get_lance_db_path, migrate
-from capyidx.utils.uri import get_uri_path_basename
+from capyidx.utils.uri1 import get_uri_path_basename
 from capyidx.embeddings.base import Embeddings
 
 

@@ -5,8 +5,8 @@ from uuid import uuid4
 
 from capyidx.base.index_d import Chunk, ChunkWithoutID, ChunkingResult, Chonk, Symbol
 from capyidx.utils.count_tokens import count_tokens_async
-from capyidx.utils.tree_sitter import supported_languages
-from capyidx.utils.uri import get_uri_file_extension, get_uri_path_basename
+from capyidx.utils.tree_sitter_utils import supported_languages
+from capyidx.utils.uri1 import get_uri_file_extension, get_uri_path_basename
 from capyidx.chunker.basic import basic_chunker
 from capyidx.chunker.code import code_chunker
 
