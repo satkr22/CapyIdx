@@ -112,5 +112,5 @@ python -m compileall -q src tests
 pytest
 python -m build
 ```
-
+![CI](https://github.com/satkr22/CapyIdx/actions/workflows/ci.yml/badge.svg)
 The repository's CI runs these checks on Python 3.10, 3.11, and 3.12.
