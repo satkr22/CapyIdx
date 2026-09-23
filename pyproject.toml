@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "capyidx"
-version = "0.1.2"
+version = "0.1.3"
 authors = [
   { name = "Satyam Kumar", email = "satkr2208@gmail.com" }
 ]
