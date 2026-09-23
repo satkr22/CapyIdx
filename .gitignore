@@ -222,7 +222,6 @@ __marimo__/
 
 
 # my added
-.github
 .venv
 .mypy_cache
 .ruff_cache
@@ -230,3 +229,4 @@ __marimo__/
 build
 dist
 .python-version
+.pytest_cache

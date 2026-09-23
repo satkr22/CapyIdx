@@ -76,6 +76,25 @@ The watcher uses `watchdog`(recommended) when installed and otherwise falls back
 Use `detail="signature"` for declaration-only results, and use
 `filter_paths` to restrict lookup to selected path prefixes.
 
+## Examples
+
+The [`examples/`](examples/) directory contains runnable scripts for the main
+workflows:
+
+```bash
+# Index a repository and look up a symbol.
+python examples/sample.py /path/to/repository MyClass --detail signature
+
+# Reuse one lookup session for several symbol queries.
+python examples/query_session.py /path/to/repository MyClass OtherClass
+
+# Keep the index updated while files change.
+python examples/watch_repository.py /path/to/repository
+```
+
+`sample.py` also demonstrates ambiguous matches, `resolve_lookup`,
+`filter_paths`, and `max_lines`.
+
 ## Current scope
 
 The public convenience API currently builds the chunk/symbol index and exposes

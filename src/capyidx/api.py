@@ -328,7 +328,7 @@ async def resolve_lookup(
 ) -> ResolvedLookup:
     """Look up a symbol and reconstruct code for *every* match.
 
-    This is the fix for the "multiple matches → ``selected`` is None"
+    This is the fix for the "multiple matches : ``selected`` is None"
     problem: instead of making the caller loop over ``matches`` and call
     :meth:`SymbolLookup.reconstruct` themselves, this returns the bodies
     in one shot.

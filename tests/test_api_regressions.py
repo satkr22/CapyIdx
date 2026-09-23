@@ -88,16 +88,25 @@ def test_index_repo_rejects_invalid_repository_paths(
         asyncio.run(capyidx.index_repo(repo))
 
 
-# def test_index_repo_rejects_directory_without_git(
-#     tmp_path: Path,
-#     monkeypatch: pytest.MonkeyPatch,
-# ) -> None:
-#     repo = tmp_path / "not-git"
-#     repo.mkdir()
-#     monkeypatch.chdir(repo)
+def test_index_repo_allows_directory_without_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "not-git"
+    repo.mkdir()
+    (repo / "module.py").write_text(
+        "def available_without_git():\n    return True\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CAPYIDX_HOME", str(tmp_path / "capyidx-home"))
 
-#     with pytest.raises(RuntimeError, match="git repository"):
-#         asyncio.run(capyidx.index_repo(repo))
+    asyncio.run(capyidx.index_repo(repo, max_chunk_size=128))
+
+    result = asyncio.run(
+        capyidx.lookup_symbol(repo, "available_without_git")
+    )
+    assert result.selected is not None
 
 
 def test_unknown_symbol_returns_empty_matches(indexed_repo: Path) -> None:
@@ -162,3 +171,53 @@ def test_signature_detail_and_max_lines(indexed_repo: Path) -> None:
     assert truncated.selected is not None
     assert "more lines omitted" in truncated.selected.code
     assert "return third" not in truncated.selected.code
+
+
+def test_explicit_symbol_id_selects_one_ambiguous_match(indexed_repo: Path) -> None:
+    matches = asyncio.run(capyidx.lookup_symbol(indexed_repo, "duplicate")).matches
+
+    result = asyncio.run(
+        capyidx.lookup_symbol(
+            indexed_repo,
+            "duplicate",
+            symbol_id=matches[1].id,
+        )
+    )
+
+    assert len(result.matches) == 2
+    assert result.selected is not None
+    assert result.selected.id == matches[1].id
+
+
+def test_resolve_lookup_reconstructs_all_ambiguous_matches(
+    indexed_repo: Path,
+) -> None:
+    result = asyncio.run(capyidx.resolve_lookup(indexed_repo, "duplicate"))
+
+    assert result.selected is None
+    assert [code.id for code in result.codes] == [
+        match.id for match in result.matches
+    ]
+    assert {code.code.rstrip() for code in result.codes} == {
+        'def duplicate():\n    return "alpha"',
+        'def duplicate():\n    return "beta"',
+    }
+
+
+def test_reconstruct_symbol_supports_signature_detail(
+    indexed_repo: Path,
+) -> None:
+    lookup = asyncio.run(capyidx.lookup_symbol(indexed_repo, "duplicate"))
+    symbol_id = lookup.matches[0].id
+
+    reconstructed = asyncio.run(
+        capyidx.reconstruct_symbol(
+            indexed_repo,
+            symbol_id,
+            detail="signature",
+        )
+    )
+
+    assert reconstructed.id == symbol_id
+    assert reconstructed.code == "def duplicate():"
+    assert "return" not in reconstructed.code
