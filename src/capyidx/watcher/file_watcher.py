@@ -68,7 +68,8 @@ class _WatchdogHandler(_WatchdogEventHandler):
             local_path = get_uri_to_path(p)
             if Path(local_path).exists():
                 self.ignore.add(git_ig_array_from_file_path(local_path))
-
+            # TODO: a repo where .gitignore gets edited won't pick up new ignore rules until restart.
+            
     def _push(self, path: str):
         if os.path.isdir(path):
             return
@@ -91,6 +92,7 @@ class _WatchdogHandler(_WatchdogEventHandler):
         self._push(event.src_path)
 
     def on_moved(self, event):
+        self._push(event.src_path)
         self._push(event.dest_path)
 
 

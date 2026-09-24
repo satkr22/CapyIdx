@@ -230,3 +230,4 @@ build
 dist
 .python-version
 .pytest_cache
+*.txt
