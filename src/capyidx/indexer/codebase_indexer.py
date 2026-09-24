@@ -4,12 +4,15 @@ Core codebase indexer orchestrator.
 
 from __future__ import annotations
 
+import logging
 import asyncio
+import inspect
 import re
 import sqlite3
 import time
 from pathlib import Path
 from typing import (
+    Any,
     AsyncGenerator,
     List,
     Optional,
@@ -35,6 +38,7 @@ from capyidx.walker.walk_dir import WalkerOptions, walk_dir_async
 from capyidx.watcher.file_watcher import FileWatcher, AutoFileWatcher
 from capyidx.utils.uri1 import get_uri_path_basename, get_uri_to_path
 from capyidx.utils.disk_operations import DiskOperations
+from capyidx.mcp.cache import SymbolCache
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -168,7 +172,9 @@ class CodeIndexer:
         files_per_batch: int = FILES_PER_BATCH,
         initial_paused: bool = False,
         disabled: bool = False,
+        cache_max_bytes: int = 3072,
     ) -> None:
+        self.logger = logging.getLogger(__name__)
         self.fs = fs
         self.watcher = watcher or AutoFileWatcher()
         self.files_per_batch = files_per_batch
@@ -187,9 +193,31 @@ class CodeIndexer:
             status="loading",
         )
 
+        self._system_ready: bool = False       # False during startup AND branch reindex
+        self._pending: set[str] = set()         # queued, watcher saw it, refresh not started
+        self._in_flight: set[str] = set()       # refresh actively running on these paths
+        self._cache = SymbolCache(max_bytes=cache_max_bytes)  # Phase 3
+        self._watch_started: asyncio.Event | None = None
+        self._watch_stop: asyncio.Event | None = None
+        self._watch_stopped: asyncio.Event | None = None
+        self._watch_fill_task: asyncio.Task[None] | None = None
+        self._watch_restart: asyncio.Event | None = None
+        self._watcher_error: BaseException | None = None
+        self._branch_switch_lock = asyncio.Lock()
+
     # ------------------------------------------------------------------
     # Public pause / state
     # ------------------------------------------------------------------
+
+    # used for inderxer start/restart
+    @property
+    def system_ready(self) -> bool:
+        return self._system_ready
+
+    # used for per-file indexing status check
+    @property
+    def pending_paths(self) -> frozenset[str]:
+        return frozenset(self._pending | self._in_flight)
 
     @property
     def paused(self) -> bool:
@@ -203,6 +231,58 @@ class CodeIndexer:
     def current_indexing_state(self) -> IndexingProgressUpdate:
         return self._state
 
+    def get_index_status(self) -> dict[str, object]:
+        """Return a read-only diagnostic snapshot for internal host use.
+
+        This is intentionally a normal indexer method, not an MCP tool.
+        Collection values are copied to immutable tuples so callers cannot
+        mutate the indexer's pending/in-flight state.
+        """
+        state = self._state
+        pending = tuple(sorted(self._pending))
+        in_flight = tuple(sorted(self._in_flight))
+        unsettled = tuple(sorted(set(pending) | set(in_flight)))
+
+        watcher_running = (
+            self._watch_started is not None
+            and self._watch_fill_task is not None
+            and not self._watch_fill_task.done()
+            and self._watch_stop is not None
+            and not self._watch_stop.is_set()
+        )
+        watcher_state = (
+            "failed"
+            if self._watcher_error is not None
+            else "running"
+            if watcher_running
+            else "stopped"
+        )
+
+        return {
+            "system_ready": self._system_ready,
+            "current": {
+                "progress": state.progress,
+                "description": state.desc,
+                "status": state.status,
+                "warnings": list(state.warnings or ()),
+            },
+            "pending_paths": pending,
+            "in_flight_paths": in_flight,
+            "unsettled_paths": unsettled,
+            "pending_count": len(pending),
+            "in_flight_count": len(in_flight),
+            "watcher": {
+                "state": watcher_state,
+                "error": str(self._watcher_error)
+                if self._watcher_error is not None
+                else None,
+            },
+            "cache": {
+                "current_bytes": self._cache.current_bytes,
+                "max_bytes": self._cache.max_bytes,
+            },
+        }
+
     def cancel(self) -> None:
         """Cancel the in-flight full-directory refresh (if any)."""
         if self._directory_token:
@@ -210,44 +290,193 @@ class CodeIndexer:
 
         if self._file_token:
             self._file_token.cancel()
-    
+
+    def set_system_ready(self, ready: bool) -> None:
+        """Update the process-wide readiness gate used by MCP handlers."""
+        self._system_ready = ready
+
+    def _on_watcher_died(self, task: asyncio.Task[object]) -> None:
+        """Make an unexpected watcher failure visible instead of silent."""
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            self._watcher_error = error
+            self.logger.error(
+                "file watcher stopped unexpectedly; requesting watcher restart",
+                exc_info=(type(error), error, error.__traceback__),
+            )
+            if self._watch_stop is not None:
+                self._watch_stop.set()
+
     async def start_watch(
         self,
-        db:sqlite3.Connection,
+        db: sqlite3.Connection,
         workspace_dirs: list[str],
         flush_interval: float = 10.0,
     ):
         """
-        Consume the file watcher, batch changes, and flush every
-        `flush_interval` seconds. Yields IndexingProgressUpdate on each flush.
+        Consume the file watcher, batching changes until each flush interval.
+        The watch can be stopped safely by a branch-switch supervisor.
         """
-        pending: set[str] = set()
         watcher = self.watcher.watch(workspace_dirs)
+        self._watch_started = asyncio.Event()
+        self._watch_stop = asyncio.Event()
+        self._watcher_error = None
+        self._watch_stopped = asyncio.Event()
+        if self._watch_restart is None:
+            self._watch_restart = asyncio.Event()
 
-        async def _fill():
+        async def _fill() -> None:
+            assert self._watch_started is not None
+            self._watch_started.set()
             async for batch in watcher:
-                pending.update(batch)
+                for path in batch:
+                    self._pending.add(path)
+                    self._cache.invalidate_path(path)
 
         fill_task = asyncio.create_task(_fill())
+        self._watch_fill_task = fill_task
+        fill_task.add_done_callback(self._on_watcher_died)
 
         try:
-            while True:
-                await asyncio.sleep(flush_interval)
+            while self._watch_stop is not None and not self._watch_stop.is_set():
+                try:
+                    await asyncio.wait_for(
+                        self._watch_stop.wait(),
+                        timeout=flush_interval,
+                    )
+                except asyncio.TimeoutError:
+                    pass
 
-                if not pending:
+                if self._watch_stop.is_set():
+                    break
+                if not self._pending:
                     continue
 
-                files = sorted(pending)
-                pending.clear()
+                # Preserve watcher events until the initial/full refresh ends.
+                if (
+                    self._directory_token is not None
+                    and not self._directory_token.cancelled
+                ):
+                    continue
 
-                async for update in self.refresh_codebase_index_files(files=files, db=db):
-                    yield update
+                batch = set(self._pending)
+                self._pending.difference_update(batch)
+                self._in_flight.update(batch)
+
+                batch_failed = False
+                try:
+                    async for update in self.refresh_codebase_index_files(
+                        files=sorted(batch),
+                        db=db,
+                    ):
+                        yield update
+                        if update.status in {"failed", "cancelled"}:
+                            batch_failed = True
+                    if batch_failed:
+                        raise RuntimeError("incremental refresh reported a failure")
+                except Exception:
+                    self.logger.exception("refresh failed for batch, requeueing")
+                    self._pending.update(batch)
+                finally:
+                    self._in_flight.difference_update(batch)
         finally:
             fill_task.cancel()
             try:
                 await fill_task
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                self.logger.exception("file watcher task terminated with an error")
+            self._watch_fill_task = None
+            if self._watch_stopped is not None:
+                self._watch_stopped.set()
+            self._watch_started = None
+
+    async def stop_watch(self) -> None:
+        """Stop the active file watcher and wait for its refresh loop."""
+        stop = self._watch_stop
+        stopped = self._watch_stopped
+        if stop is None or stopped is None:
+            return
+        stop.set()
+        if self._watch_fill_task is not None:
+            self._watch_fill_task.cancel()
+        await stopped.wait()
+        self._watch_stop = None
+        self._watch_stopped = None
+
+    async def wait_for_watch_restart(self) -> bool:
+        """Wait for a branch switch or watcher failure before restarting."""
+        while True:
+            if self._watch_restart is not None and self._watch_restart.is_set():
+                self._watch_restart.clear()
+                return True
+            if self._watcher_error is not None:
+                self._watcher_error = None
+                await asyncio.sleep(0.25)
+                return True
+            await asyncio.sleep(0.1)
+
+    async def _handle_branch_switch(
+        self,
+        workspace_dir: str,
+        db: sqlite3.Connection,
+        workspace_dirs: Sequence[str] | None = None,
+        progress_callback: Any | None = None,
+    ) -> None:
+        async with self._branch_switch_lock:
+            self._system_ready = False
+            await self.stop_watch()
+            self._pending.clear()
+            self._in_flight.clear()
+            self._cache.clear()
+
+            dirs = list(workspace_dirs or await self.fs.get_workspace_dirs())
+            async for update in self.refresh_codebase_index(dirs, db):
+                if progress_callback is not None:
+                    result = progress_callback(update)
+                    if inspect.isawaitable(result):
+                        await result
+
+            if self.current_indexing_state.status == "done":
+                self._system_ready = True
+            if self._watch_restart is not None:
+                self._watch_restart.set()
+
+    async def watch_git_head(
+        self,
+        workspace_dir: str,
+        db: sqlite3.Connection,
+        workspace_dirs: Sequence[str] | None = None,
+        progress_callback: Any | None = None,
+        interval: float = 0.5,
+    ) -> None:
+        """Poll .git/HEAD and reindex atomically when its content changes."""
+        root = (
+            get_uri_to_path(workspace_dir)
+            if workspace_dir.startswith("file://")
+            else workspace_dir
+        )
+        head_path = Path(root) / ".git" / "HEAD"
+        last = head_path.read_bytes() if head_path.exists() else None
+
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                current = head_path.read_bytes() if head_path.exists() else None
+                if current == last:
+                    continue
+                last = current
+                await self._handle_branch_switch(
+                    workspace_dir,
+                    db,
+                    workspace_dirs=workspace_dirs,
+                    progress_callback=progress_callback,
+                )
+        except asyncio.CancelledError:
+            return
 
     async def get_indexes_to_build(self) -> List[CodebaseIndexer]:
         """
