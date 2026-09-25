@@ -63,7 +63,7 @@ def _ast_signature(node: Node, code: bytes) -> str:
         return code[node.start_byte:end].rstrip().decode()
 
     if node.type in CLASS_NODE_TYPES:
-        block = first_child(node, ["block", "class_body", "declaration_list"])
+        block = first_child(node, CLASS_BODY_NODE_TYPES)
         if block is None:
             end = node.end_byte
         else:
@@ -89,19 +89,56 @@ FUNCTION_DECLARATION_NODE_TYPES = [
     "function_item",
     "function_declaration",
     "method_declaration",
+    # TypeScript / TSX
+    "method_signature",
+    "abstract_method_signature",
+    "arrow_function",
 ]
 
-CLASS_NODE_TYPES = ("class_definition", "class_declaration", "impl_item")
+CLASS_NODE_TYPES = (
+    "class_definition", 
+    "class_declaration", 
+    "impl_item",
+    # TypeScript / TSX
+    "interface_declaration",
+)
 
+CLASS_BODY_NODE_TYPES = [
+    "block",
+    "class_body",
+    "declaration_list",
+    "interface_body",
+]
 
+DECLARATION_NAME_NODE_TYPES = [
+    "identifier",
+    "property_identifier",
+    "type_identifier",
+]
+
+ARROW_NAME_PARENT_TYPES = [
+    "variable_declarator",       # const foo = () => {}
+    "public_field_definition",   # class field: handleClick = () => {}
+    "pair",                      # object literal: { onClick: () => {} }
+]
 # =============================================================================
 # AST Helpers
 # =============================================================================
 
+
+def _resolve_symbol_name(node: Node) -> Optional[Node]:
+    name_node = first_child(node, DECLARATION_NAME_NODE_TYPES)
+    if name_node is not None:
+        return name_node
+    if node.type == "arrow_function" and node.parent is not None:
+        if node.parent.type in ARROW_NAME_PARENT_TYPES:
+            return first_child(node.parent, DECLARATION_NAME_NODE_TYPES)
+    return None
+
 def get_method_nodes(class_node: Node) -> list[Node]:
     block = first_child(
         class_node,
-        ["block", "class_body", "declaration_list"],
+        CLASS_BODY_NODE_TYPES,
     )
 
     if block is None:
@@ -210,7 +247,7 @@ def _collect_units(
             last_pos = grand_child.end_byte
         elif child.type in CLASS_NODE_TYPES:
             nested_block = first_child(
-                child, ["block", "class_body", "declaration_list"]
+                child, CLASS_BODY_NODE_TYPES
             )
             if nested_block is None:
                 continue
@@ -313,7 +350,7 @@ async def construct_class_definition_chunk(
     return await collapse_children(
         node,
         code,
-        ["block", "class_body", "declaration_list"],
+        CLASS_BODY_NODE_TYPES,
         FUNCTION_DECLARATION_NODE_TYPES,
         FUNCTION_BLOCK_NODE_TYPES,
         max_chunk_size,
@@ -328,7 +365,9 @@ def _build_function_header(
     node: Node,
     code: bytes,
 ) -> bytes:
-    body_node = node.children[-1]
+    body_node = first_child(node, FUNCTION_BLOCK_NODE_TYPES)
+    if body_node is None:
+        return code[node.start_byte:node.end_byte]
     signature = code[node.start_byte : body_node.start_byte]
 
     parent = node.parent
@@ -336,9 +375,9 @@ def _build_function_header(
 
     is_in_class = (
         parent is not None
-        and parent.type in ("block", "declaration_list")
+        and parent.type in CLASS_BODY_NODE_TYPES
         and class_node is not None
-        and class_node.type in ("class_definition", "impl_item")
+        and class_node.type in CLASS_NODE_TYPES
     )
 
     if is_in_class:
@@ -488,7 +527,7 @@ async def walk(
     # ---------------------------------------------------------------------
     if node.type in CLASS_NODE_TYPES:
         
-        name_node = first_child(node, "identifier")
+        name_node = _resolve_symbol_name(node)
         sig = _ast_signature(node, code)
         
         class_symbol = Symbol(
@@ -506,7 +545,7 @@ async def walk(
         text = _node_text_bytes(node).decode()
         tokens = await count_tokens_async(text)
 
-        block = first_child(node, ["block", "class_body", "declaration_list"])
+        block = first_child(node, CLASS_BODY_NODE_TYPES)
 
         # -----------------------------------------------------------------
         # Small class → one class chunk only; methods get symbols only.
@@ -582,7 +621,7 @@ async def walk(
     # ---------------------------------------------------------------------
     if node.type in FUNCTION_DECLARATION_NODE_TYPES:
         
-        name_node = first_child(node, "identifier")
+        name_node = _resolve_symbol_name(node)
         sig = _ast_signature(node, code)
         
         func_symbol = Symbol(

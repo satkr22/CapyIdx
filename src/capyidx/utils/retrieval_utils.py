@@ -4,6 +4,7 @@ import os
 
 from capyidx.base.index_d import BranchAndDir, Chunk
 from capyidx.utils.parameters import RETRIEVAL_PARAMS, RERANK_DEFAULTS
+from capyidx.utils.uri1 import get_uri_to_path
 
 T = TypeVar("T")
 
@@ -34,7 +35,9 @@ def get_current_tags(directories: List[str]) -> List[BranchAndDir]:
     try:
         # Get current git branch
         branch = subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], 
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=get_uri_to_path(directories[0]),
+            stderr=subprocess.DEVNULL,  
             text=True
         ).strip()
     except subprocess.CalledProcessError:
