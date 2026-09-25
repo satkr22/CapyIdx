@@ -64,8 +64,8 @@ def _print_matches(result) -> None:
 
 
 DB_PATH = get_index_sqlite_path()
-WORKSPACE_DIR = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
-# WORKSPACE_DIR = Path.cwd()
+# WORKSPACE_DIR = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+WORKSPACE_DIR = Path.cwd()
 QUERYS = [
     "dfswalker", 
     "chunkcodebaseIndex",
@@ -147,7 +147,7 @@ async def main() -> None:
                     _print_code_tree(
                         lookup.reconstruct(
                             match.id,
-                            # detail="signature"
+                            detail="signature"
                         )
                     )
             print()
