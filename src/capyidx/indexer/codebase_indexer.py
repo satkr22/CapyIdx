@@ -99,20 +99,8 @@ class CancellationToken:
 
 
 # ---------------------------------------------------------------------------
-# URI helpers (minimal replacements for Continue util/uri)
+# URI helpers
 # ---------------------------------------------------------------------------
-
-def _uri_path_basename(uri: str) -> str:
-    """Basename of a file:// URI or plain path."""
-    if uri.startswith("file://"):
-        parsed = urlparse(uri)
-        print(parsed)
-        path = unquote(parsed.path)
-    else:
-        path = uri
-        print(path)
-    return Path(path.rstrip("/")).name or path
-
 
 def _find_uri_in_dirs(file_uri: str, workspace_dirs: Sequence[str]) -> Optional[str]:
     """
@@ -168,12 +156,12 @@ class CodeIndexer:
         fs: DiskOperations,
         indexes: Optional[List[CodebaseIndexer]] = None,
         watcher: FileWatcher | None = None,
-        # index_types: Optional[Set[ContextIndexingType]] = None,
         files_per_batch: int = FILES_PER_BATCH,
         initial_paused: bool = False,
         disabled: bool = False,
         cache_max_bytes: int = 3072,
     ) -> None:
+        
         self.logger = logging.getLogger(__name__)
         self.fs = fs
         self.watcher = watcher or AutoFileWatcher()
@@ -182,7 +170,6 @@ class CodeIndexer:
 
         self._pause = PauseToken(initial_paused)
         self._built_indexes: List[CodebaseIndexer] = list(indexes) if indexes else []
-        # self._index_types: Set[ContextIndexingType] = set(index_types or [])
         
         self._directory_token: Optional[CancellationToken] = None
         self._file_token: Optional[CancellationToken] = None
@@ -196,7 +183,7 @@ class CodeIndexer:
         self._system_ready: bool = False       # False during startup AND branch reindex
         self._pending: set[str] = set()         # queued, watcher saw it, refresh not started
         self._in_flight: set[str] = set()       # refresh actively running on these paths
-        self._cache = SymbolCache(max_bytes=cache_max_bytes)  # Phase 3
+        self._cache = SymbolCache(max_bytes=cache_max_bytes)  # cache for get_symbol hit
         self._watch_started: asyncio.Event | None = None
         self._watch_stop: asyncio.Event | None = None
         self._watch_stopped: asyncio.Event | None = None
