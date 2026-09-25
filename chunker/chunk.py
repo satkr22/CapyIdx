@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from base.index_d import Chunk, ChunkWithoutID, ChunkingResult, Chonk, Symbol
 from utils.count_tokens import count_tokens_async
-from utils.tree_sitter import supported_languages
+from utils.tree_sitter_helper import supported_languages
 from utils.uri import get_uri_file_extension, get_uri_path_basename
 from chunker.basic import basic_chunker
 from chunker.code import code_chunker
@@ -48,6 +48,7 @@ async def chunk_document_without_id(
     file_uri: str,
     contents: str,
     max_chunk_size: int,
+    parse_time: list
 ) -> AsyncGenerator[Chonk | ChunkingResult, None]:
     if len(contents.strip()) == 0:
         return
@@ -58,7 +59,7 @@ async def chunk_document_without_id(
     if extension in supported_languages and extension not in NON_CODE_EXTENSIONS:
         try:
             async for chunk in code_chunker(
-                file_uri, contents, max_chunk_size, result
+                file_uri, contents, max_chunk_size, parse_time, result
             ):
                 yield chunk
             yield result
@@ -108,6 +109,7 @@ async def chunk_document_without_id(
 
 async def chunk_document(
     param: ChunkDocumentParam,
+    parse_time: list
 ) -> AsyncGenerator[Chunk | ChunkingResult, None]:
     filepath = param.filepath
     contents = param.contents
@@ -160,7 +162,7 @@ async def chunk_document(
     # chunk's token-count check runs concurrently.
     chunk_tasks: List[asyncio.Task] = []
     async for chunk_without_id in chunk_document_without_id(
-        filepath, contents, max_chunk_size
+        filepath, contents, max_chunk_size, parse_time
     ):
         if isinstance(chunk_without_id, ChunkingResult):
             yield chunk_without_id

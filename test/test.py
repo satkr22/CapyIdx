@@ -28,17 +28,15 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from time import perf_counter
 
 from base.db import SqliteDB
 from utils.disk_operations import DiskOperations
-
 from chunker.chunkCodebaseIndex import ChunkCodebaseIndex
 from fts.fullTextSearchCodebaseIndex import FullTextSearchCodebaseIndex
 from codesnippet.codeSnippetsIndex import CodeSnippetsCodebaseIndex
 from lance_db.lanceDbIndex import LanceDbIndex
-
 from embeddings.local import LocalEmbeddings
-
 from indexer.codeBaseIndexer import CodeIndexer
 
 
@@ -47,42 +45,14 @@ WORKSPACE = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
 # WORKSPACE = Path("/home/usatkr/u_ml/projects/AI_Copilot").resolve()
 # WORKSPACE = Path.cwd()
 
-# SQLite database location
-# DB_PATH = WORKSPACE / "index.db"
-
 
 async def main():
-    # ------------------------------------------------------------------
-    # Initialise database
-    # ------------------------------------------------------------------
-    SqliteDB.initialize()
-
-    db = SqliteDB.get()
-
-    # ------------------------------------------------------------------
-    # Filesystem
-    # ------------------------------------------------------------------
-    fs = DiskOperations(roots=[str(WORKSPACE.resolve())])
     
-    # ------------------------------------------------------------------
     # Embeddings
-    # ------------------------------------------------------------------
     # embeddings_provider = LocalEmbeddings()
     # embeddings_provider = LocalEmbeddings("jinaai/jina-embeddings-v2-base-code")
     
-    
-
-    # ------------------------------------------------------------------
-    # Build indexes (only Chunk index for now)
-    # ------------------------------------------------------------------
-    
-    chunk_index = ChunkCodebaseIndex(
-        db=db,
-        filesystem=fs,
-        # max_chunk_size=embeddings_provider.max_embedding_chunk_size,
-        max_chunk_size=512
-    )
-    
+    # Build indexes (only Chunk index for now)    
     # fts_index = FullTextSearchCodebaseIndex(
     #     db=db
     # )
@@ -100,6 +70,27 @@ async def main():
     # if lancedb_index is None:
     #     raise RuntimeError("Failed to create LanceDB index")
     
+    
+    #----------------------------------------------------------
+    
+    
+    
+    # Initialise database
+    SqliteDB.initialize()
+    db = SqliteDB.get()
+
+    # Filesystem
+    fs = DiskOperations(roots=[str(WORKSPACE.resolve())])
+    root = (await fs.get_workspace_dirs())
+    
+    # chunker initialization
+    chunk_index = ChunkCodebaseIndex(
+        db=db,
+        filesystem=fs,
+        # max_chunk_size=embeddings_providermax_embedding_chunk_size,
+        max_chunk_size=512
+    )
+    
     # main orchestrator
     indexer = CodeIndexer(
         fs=fs,
@@ -111,47 +102,43 @@ async def main():
         ],
     )
     
-    root = (await fs.get_workspace_dirs())
-    # print(root)
-
-    # ------------------------------------------------------------------
     # Run indexing
-    # ------------------------------------------------------------------
     async for update in indexer.refresh_codebase_index(root):
         print(
             f"[{update.status.upper():9}] "
             f"{update.progress:6.1%} | {update.desc}"
         )
-
         if update.warnings:
             for warning in update.warnings:
                 print("   Warning:", warning)
-
     print("\nIndexing finished.")
+    
+    
+    print("read_time:", chunk_index.read_time)
+    print("parse_time:", chunk_index.parse_time)
+    with open("res.txt", "w+") as f:
+        for t in chunk_index.parse_time:
+            f.write(f"{t}\n")
+        
+    print("chunk_time:", chunk_index.chunk_time)
+    print("db_time:", chunk_index.db_time)
 
-    # ------------------------------------------------------------------
+
     # Verify database contents
-    # ------------------------------------------------------------------
     print("\n--- Database Stats ---")
-
     chunk_count = db.execute(
         "SELECT COUNT(*) FROM chunks"
     ).fetchone()[0]
-
     tag_count = db.execute(
         "SELECT COUNT(*) FROM chunk_tags"
     ).fetchone()[0]
-
     catalog_count = db.execute(
         "SELECT COUNT(*) FROM tag_catalog"
     ).fetchone()[0]
-
     print(f"Chunks      : {chunk_count}")
     print(f"Chunk Tags  : {tag_count}")
     print(f"Tag Catalog : {catalog_count}")
-
     print("\nSample chunks:\n")
-
     rows = db.execute(
         """
         SELECT path, idx, startLine, endLine
@@ -160,8 +147,6 @@ async def main():
         LIMIT 10
         """
     ).fetchall()
-
-    
     for row in rows:
         print(
             f"{Path(row[0]).name:25} "

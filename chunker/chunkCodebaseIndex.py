@@ -5,6 +5,7 @@ import os
 import sqlite3
 from typing import AsyncIterator
 from uuid import uuid4
+from time import perf_counter
 
 from base.index_d import (
     Chunk,
@@ -42,6 +43,11 @@ class ChunkCodebaseIndex(CodebaseIndexer):
         self.fs = filesystem
         self.max_chunk_size = max_chunk_size
         self.create_tables()
+        
+        self.read_time = 0
+        self.chunk_time = 0
+        self.db_time = 0
+        self.parse_time = []
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -54,6 +60,8 @@ class ChunkCodebaseIndex(CodebaseIndexer):
         results: RefreshIndexResults,
         mark_complete: MarkCompleteCallback,
     ) -> AsyncIterator[IndexingProgressUpdate]:
+        
+        
 
         tag_string = tag_to_string(tag)
         progress = 0.0
@@ -69,17 +77,25 @@ class ChunkCodebaseIndex(CodebaseIndexer):
                 desc=f"Chunking files in {folder}",
                 status="indexing",
             )
-
+            
             for item in results.compute:
-                chunks, result = await self.pack_to_chunks(item)
-
+                
+                
+                t3 = perf_counter()
+                chunks, result = await self.pack_to_chunks(item, self.parse_time)
+                self.chunk_time += perf_counter() - t3
                 # Wipe any prior rows for this file (cascade drops chunk_tags)
+                t2 = perf_counter()
                 self.delete_file_chunks_and_symbols(item.cache_key)
+                self.db_time += perf_counter()-t2
 
                 # FK order: symbols first, then chunks.
+                
+                t2 = perf_counter()
                 self.insert_symbols(item.cache_key, item.path, result.symbols)
                 self.insert_chunks(tag_string, chunks)
-
+                self.db_time += perf_counter()-t2
+                
                 await mark_complete([item], IndexResultType.COMPUTE)
 
         # -------------------------------------------------------------- #
@@ -160,29 +176,35 @@ class ChunkCodebaseIndex(CodebaseIndexer):
     async def pack_to_chunks(
         self,
         pack: PathAndCacheKey,
+        parse_time: list
     ) -> tuple[list[Chunk], ChunkingResult]:
 
+        t0 = perf_counter()
         contents = await self.fs.read_file(pack.path)
-
+        self.read_time += perf_counter() - t0
+        
         if not should_chunk(pack.path, contents):
             return [], ChunkingResult()
 
         chunks: list[Chunk] = []
         result = ChunkingResult()
 
+        t1 = perf_counter()
         async for item in chunk_document(
             ChunkDocumentParam(
                 filepath=pack.path,
                 contents=contents,
                 maxChunkSize=self.max_chunk_size,
                 digest=pack.cache_key,
-            )
+            ),
+            parse_time
         ):
+            self.chunk_time += perf_counter() - t1
             if isinstance(item, ChunkingResult):
                 result = item
             else:
                 chunks.append(item)
-
+            
         return chunks, result
 
     # ------------------------------------------------------------------ #

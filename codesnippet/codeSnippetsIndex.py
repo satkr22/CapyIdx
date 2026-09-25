@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, Optional, List, Dict, Tuple
 
 from tree_sitter import QueryCursor, Node, Query
 
-import utils.tree_sitter as _utils_tree_sitter
+import utils.tree_sitter_helper as _utils_tree_sitter
 from base.db import SqliteDB
 from base.index_d import (
     FileSystem,
@@ -24,7 +24,7 @@ from base.index_types import (
 )
 from utils.chunk_utils import tag_to_string
 from utils.paths import migrate
-from utils.tree_sitter import (
+from utils.tree_sitter_helper import (
     get_full_language_name,
     get_parser_for_file,
     get_query_for_file,

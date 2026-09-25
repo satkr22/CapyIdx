@@ -3,12 +3,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import AsyncGenerator, Literal, Optional, Union
 from uuid import UUID, uuid4
+from time import perf_counter
+
+# from concurrent.futures import ProcessPoolExecutor
+# import os
 
 from tree_sitter import Node
 
 from base.index_d import ChunkingResult, Symbol, Chonk
 from utils.count_tokens import count_tokens_async
-from utils.tree_sitter import get_parser_for_file
+from utils.tree_sitter_helper import get_parser_for_file
+
+# from uuid import uuid4
+# from tree_sitter import Parser
+
+# usable_cpu = os.sched_getaffinity(0)
+# print(usable_cpu)
+# print("Number of usable cpu:", len(usable_cpu))
+
+# PROCESS_POOL = ProcessPoolExecutor(
+#     max_workers=max(1, len(usable_cpu)-1)
+# )
 
 
 # =============================================================================
@@ -298,7 +313,7 @@ def _make_chonk(
         signature=_extract_signature(content),
     )
 
-
+# actual_chunking_time = 0
 # =============================================================================
 # Repository Intelligence Walker
 # =============================================================================
@@ -313,10 +328,11 @@ async def walk(
     current_symbol_id: UUID,
     allow_chunking: bool = True,
 ) -> AsyncGenerator[Chonk, None]:
-
+    # global actual_chunking_time
     # ---------------------------------------------------------------------
     # CLASS
     # ---------------------------------------------------------------------
+    # t4 = perf_counter()
     if node.type in CLASS_NODE_TYPES:
         name_node = first_child(node, "identifier")
 
@@ -348,6 +364,9 @@ async def walk(
                 end_line=node.end_point[0] + 1,
             )
             result.chunks.append(chunk)
+            # actual_chunking_time += perf_counter() - t4
+            # print("*"*30)
+            # print("actual_chunking_time:", actual_chunking_time)
             yield chunk
 
             if block:
@@ -360,6 +379,9 @@ async def walk(
                         class_symbol.id,
                         allow_chunking=True, # allowed small methods too to get their own chunks
                     ):
+                        # actual_chunking_time += perf_counter() - t4
+                        # print("*"*30)
+                        # print("actual_chunking_time:", actual_chunking_time)
                         yield nested
             return
 
@@ -376,6 +398,9 @@ async def walk(
             end_line=node.end_point[0] + 1,
         )
         result.chunks.append(chunk)
+        # actual_chunking_time += perf_counter() - t4
+        # print("*"*30)
+        # print("actual_chunking_time:", actual_chunking_time)
         yield chunk
 
         if block:
@@ -388,6 +413,9 @@ async def walk(
                     class_symbol.id,
                     allow_chunking=True,
                 ):
+                    # actual_chunking_time += perf_counter() - t4
+                    # print("*"*30)
+                    # print("actual_chunking_time:", actual_chunking_time)
                     yield nested
         return
 
@@ -421,6 +449,9 @@ async def walk(
                     end_line=node.end_point[0] + 1,
                 )
                 result.chunks.append(chunk)
+                # actual_chunking_time += perf_counter() - t4
+                # print("*"*30)
+                # print("actual_chunking_time:", actual_chunking_time)
                 yield chunk
             else:
                 pieces = await split_large_function(
@@ -443,6 +474,9 @@ async def walk(
                         chunk_id=chunk_ids[i],
                     )
                     result.chunks.append(chunk)
+                    # actual_chunking_time += perf_counter() - t4
+                    # print("*"*30)
+                    # print("actual_chunking_time:", actual_chunking_time)
                     yield chunk
 
         # Recurse into the body for nested functions/classes (symbols only).
@@ -457,6 +491,9 @@ async def walk(
                     func_symbol.id,
                     allow_chunking=False,
                 ):
+                    # actual_chunking_time += perf_counter() - t4
+                    # print("*"*30)
+                    # print("actual_chunking_time:", actual_chunking_time)
                     yield nested
         return
 
@@ -472,31 +509,43 @@ async def walk(
             current_symbol_id,
             allow_chunking,
         ):
+            # actual_chunking_time += perf_counter() - t4
+            # print("*"*30)
+            # print("actual_chunking_time:", actual_chunking_time)
             yield nested
-
-
 # =============================================================================
 # Entry Point
 # =============================================================================
 # Yields Chonk (with every field populated, incl. signature).
 # Populates `result` with the full symbol graph (children + chunk_ids).
+p_time = 0
 
 async def code_chunker(
     filepath: str,
     contents: str,
     max_chunk_size: int,
+    parse_time: list,
     result: ChunkingResult | None = None,
 ) -> AsyncGenerator[Chonk, None]:
-
+    global p_time
     if len(contents.strip()) == 0:
         return
 
     parser = await get_parser_for_file(filepath)
     if parser is None:
         raise ValueError(f"Failed to load parser for {filepath}")
-
+    
+    t3 = perf_counter()
     code = contents.encode("utf-8")
     tree = parser.parse(code)
+    p_time += perf_counter() - t3
+    # parse_time.clear()
+    parse_time.append(p_time)
+    # print("*"*30)
+    # print("parse_time:", parse_time)
+    
+
+
 
     if result is None:
         result = ChunkingResult()
@@ -511,6 +560,7 @@ async def code_chunker(
     )
     _register_symbol(result, file_symbol)
 
+    
     async for chunk in walk(
         tree.root_node,
         code,
