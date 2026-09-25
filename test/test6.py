@@ -64,7 +64,8 @@ def _print_matches(result) -> None:
 
 
 DB_PATH = get_index_sqlite_path()
-WORKSPACE_DIR = Path.cwd()
+WORKSPACE_DIR = Path("/home/usatkr/u_ml/projects/continue_fork").resolve()
+# WORKSPACE_DIR = Path.cwd()
 QUERYS = [
     "dfswalker", 
     "chunkcodebaseIndex",
@@ -79,15 +80,16 @@ QUERYS = [
     
     # another repo symbols
     
-    # "RetrievalPipelineOptions",
-    # "BaseRetrievalPipeline",
-    # "retrieveContextItemsFromEmbeddings",
-    # "HttpContextProvider",
-    # "updateIndexAndAwaitGenerator",
-    # "ChunkCodebaseIndex",
-    # "createMemoryRouter",
-    # "App"
-    
+    "RetrievalPipelineOptions",
+    "BaseRetrievalPipeline",
+    "retrieveContextItemsFromEmbeddings",
+    "HttpContextProvider",
+    "updateIndexAndAwaitGenerator",
+    "ChunkCodebaseIndex",
+    "createMemoryRouter",
+    "App",
+    "update",
+    "highlightCode",
 ]
 
 async def main() -> None:
@@ -130,18 +132,18 @@ async def main() -> None:
 
             result = lookup.lookup(
                 name, 
-                # detail="signature"
+                detail="signature"
             )
             _print_matches(result)
 
             # A single match is selected automatically by the API. With
             # duplicates, reconstruct each row to make selection explicit.
             if result.selected is not None:
-                print("    selected: unique match\n    code:\n")
+                print("    selected: unique match\n    code:")
                 _print_code_tree(result.selected)
             else:
                 for match in result.matches:
-                    print(f"\n  selected explicitly: {match.id}\n  code:\n")
+                    print(f"\n  selected explicitly: {match.id}\n  code:")
                     _print_code_tree(
                         lookup.reconstruct(
                             match.id,

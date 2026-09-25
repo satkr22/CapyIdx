@@ -4,6 +4,7 @@ import os
 
 from base.index_d import BranchAndDir, Chunk
 from utils.parameters import RETRIEVAL_PARAMS, RERANK_DEFAULTS
+from utils.uri import get_uri_to_path
 
 T = TypeVar("T")
 
@@ -32,9 +33,13 @@ def deduplicate_chunks(chunks: List[Chunk]) -> List[Chunk]:
 def get_current_tags(directories: List[str]) -> List[BranchAndDir]:
     """Helper to build tags based on current git branch and workspace folders."""
     try:
+        
+        
         # Get current git branch
         branch = subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], 
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=get_uri_to_path(directories[0]),
+            stderr=subprocess.DEVNULL, 
             text=True
         ).strip()
     except subprocess.CalledProcessError:

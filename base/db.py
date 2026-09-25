@@ -10,44 +10,49 @@ from base.index_d import BranchAndDir
 import hashlib
 import json
 
+
+_tags: BranchAndDir
+
 class SqliteDB:
     _db: Optional[sqlite3.Connection] = None
     _db_path: Optional[Path] = None
     
-    def __init__(
-        self,
-        workspace_tag: BranchAndDir
-    ) -> None:
-        global _tags
-        _tags = workspace_tag
+    # def __init__(
+    #     self,
+    #     workspace_tag: BranchAndDir
+    # ) -> None:
+    #     global _tags
+    #     _tags = workspace_tag
 
     
     @staticmethod
     def default_path() -> Path:
+        # global _tags
         
-        index_folder = get_coreIndexer_global_path() / ".codebase_index"
+        # index_folder = get_coreIndexer_global_path() / ".codebase_index"
         
-        raw_identifier = f"{_tags.directory}__{_tags.branch}"
+        # raw_identifier = f"{_tags.directory}__{_tags.branch}"
         
-        db_hash = hashlib.sha256(raw_identifier.encode("utf-8")).hexdigest()
+        # db_hash = hashlib.sha256(raw_identifier.encode("utf-8")).hexdigest()
         
-        sqlite_index_file = index_folder / f"index__{db_hash}.sqlite"
+        # sqlite_index_file = index_folder / f"index__{db_hash}.sqlite"
         
-        metadata_path = get_coreIndexer_global_path() / ".codebase_index"  / f"index__{db_hash}.metadata.json"
+        # metadata_path = get_coreIndexer_global_path() / ".codebase_index"  / f"index__{db_hash}.metadata.json"
         
-        metadata_payload = {
-            "hash": db_hash,
-            "directory": _tags.directory,
-            "branch": _tags.branch,
-            "sqlite_filename": sqlite_index_file.name
-        }
-        try:
-            metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
-        except OSError as e:
-            # Gracefully log metadata failure without breaking core database creation
-            print(f"Warning: Could not write tracking metadata file: {e}")
+        # metadata_payload = {
+        #     "hash": db_hash,
+        #     "directory": _tags.directory,
+        #     "branch": _tags.branch,
+        #     "sqlite_filename": sqlite_index_file.name
+        # }
+        # try:
+        #     metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
+        # except OSError as e:
+        #     # Gracefully log metadata failure without breaking core database creation
+        #     print(f"Warning: Could not write tracking metadata file: {e}")
             
-        return sqlite_index_file
+        # return sqlite_index_file
+        return get_coreIndexer_global_path() / ".codebase_index" / "index.sqlite"
 
     @classmethod
     def initialize(cls, db_path: Optional[Path] = None) -> None:
