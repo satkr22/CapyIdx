@@ -7,6 +7,8 @@ that need repository-aware code context. It has incremental re-indexing feature
 that re-indexes only modified  or deleted (deteles indexes of deleted file) files.
 It looks for files which are modified and after a set interval(default=5 sec) it re-indexes them.
 
+Capyidx comes with in-built mcp server for codex.
+
 ## Installation
 
 ```bash

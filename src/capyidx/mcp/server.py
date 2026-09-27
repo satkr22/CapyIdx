@@ -28,7 +28,7 @@ if _SOURCE_ROOT not in sys.path:
 
 REPO_ENV_VARS = ("CAPYIDX_REPO", "CAPYIDX_ROOT")
 SERVER_NAME = "capyidx"
-SERVER_VERSION = "0.1.3"
+SERVER_VERSION = "0.1.0"
 
 
 def _repository_path() -> str:
