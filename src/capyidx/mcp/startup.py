@@ -68,7 +68,6 @@ async def mcp_start(
             max_chunk_size=512,
         )
         indexer = CodeIndexer(fs=fs, indexes=[chunk_index])
-        indexer.symbol_lookup = SymbolLookup(conn, roots)  # type: ignore[attr-defined]
 
         # MCP lifecycle responses do not wait for indexing.
         mcp_handshake(emit_message)

@@ -10,6 +10,7 @@ from tree_sitter import Node
 from capyidx.base.index_d import ChunkingResult, Symbol, Chonk
 from capyidx.utils.count_tokens import count_tokens_async
 from capyidx.utils.tree_sitter_utils import get_parser_for_file
+from capyidx.utils.uri2 import get_uri_path_basename
 
 
 # =============================================================================
@@ -539,6 +540,7 @@ async def walk(
             parent_id=current_symbol_id,
             start_line=node.start_point[0] + 1,
             end_line=node.end_point[0] + 1,
+            signature=sig,
         )
         _register_symbol(result, class_symbol)
 
@@ -633,6 +635,7 @@ async def walk(
             parent_id=current_symbol_id,
             start_line=node.start_point[0] + 1,
             end_line=node.end_point[0] + 1,
+            signature=sig,
         )
         _register_symbol(result, func_symbol)
 
@@ -740,6 +743,7 @@ async def code_chunker(
         parent_id=None,
         start_line=1,
         end_line=contents.count("\n") + 1,
+        signature=get_uri_path_basename(filepath)
     )
     _register_symbol(result, file_symbol)
 

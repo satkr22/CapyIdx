@@ -200,6 +200,7 @@ class ChunkCodebaseIndex(CodebaseIndexer):
                 parentId   TEXT,
                 startLine  INTEGER NOT NULL,
                 endLine    INTEGER NOT NULL,
+                signature  TEXT,
                 cacheKey   TEXT NOT NULL,
                 path       TEXT NOT NULL,
                 FOREIGN KEY(parentId) REFERENCES symbols(id) ON DELETE CASCADE

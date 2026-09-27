@@ -1,0 +1,5 @@
+// tools/list returns:
+{"tools": [{"name": "...", "description": "...", "inputSchema": {...}}, ...]}
+
+// tools/call returns:
+{"content": [{"type": "text", "text": "<string>"}], "isError": false}

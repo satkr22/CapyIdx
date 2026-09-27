@@ -19,6 +19,7 @@ class SymbolMatch:
     path: str
     start_line: int
     end_line: int
+    signature: str
     match_kind: MatchKind
 
     def as_dict(self) -> dict[str, object]:
@@ -29,6 +30,7 @@ class SymbolMatch:
             "path": self.path,
             "start_line": self.start_line,
             "end_line": self.end_line,
+            "signature": self.signature,
             "match_kind": self.match_kind,
         }
 

@@ -20,7 +20,7 @@ DEFAULT_CHAR_LIMIT = 12_000
 _warm_tasks: set[asyncio.Task] = set()
 
 def error(code: str, message: str) -> dict[str, object]:
-    return {"code": code, "message": message}
+    return {"__xx_e_code": code, "message": message}
 
 
 def _path_is_pending(indexer: CodeIndexer, path: str) -> bool:
@@ -144,13 +144,15 @@ def serialize_symbol_code(
 
 def _lookup_response(results: list[LookupResult]) -> dict[str, list[dict[str, object]]]:
     """Convert a list of lookup result into the MCP response-object contract."""
+    res: dict[str, list[dict[str, object]]] = {}
+    
     if not isinstance(results, list):
-        return error(
+        return [error(
             "LOOKUP_INVALID_RESPONSE",
             "symbol lookup did not return a response dictionary",
-        )
+        )]
         
-    res: dict[str, list[dict[str, object]]] = {}
+        
     for result in results:
         selected = result.selected
         if selected is not None:
@@ -160,23 +162,24 @@ def _lookup_response(results: list[LookupResult]) -> dict[str, list[dict[str, ob
                     "path": selected.path,
                     "start_line": selected.start_line,
                     "end_line": selected.end_line,
+                    "signature": selected.signature,
                 }
             ]
             continue
 
         matches = result.matches
         match_res:list[dict[str, object]] = []
-        if matches is not None:
+        if matches:
             for match in matches:
                 match_res.append({
                     "symbol_id": match.id,
                     "path": match.path,
                     "start_line": match.start_line,
                     "end_line": match.end_line,
+                    "signature": match.signature,
                 })
             res[result.query] = match_res
-    
-        elif matches is None or len(matches) == 0:
+        else:
             err = error(
                "SYMBOL_NOT_FOUND", 
                "symbol doesn't exist of index. Use `grep`"
@@ -226,22 +229,17 @@ async def handle_symbol_lookup(
     indexer: CodeIndexer,
     name: str | list[str],
     lookup: SymbolLookup,
-) -> dict[str, list[dict[str, object]]]:
+) -> dict[str, list[dict[str, object]]] | list[dict[str, object]]:
     """Return the symbol lookup result as a plain MCP response dictionary."""
     
     res: dict[str, list[dict[str, object]]] = {}
 
     if not indexer.system_ready:
-        res["indexer"] = [
-            error("INDEX_UNAVAILABLE", "Initial indexing or branch reindex in progress")
-        ]
-        return res
+        return [error("INDEX_UNAVAILABLE", "Initial indexing or branch reindex in progress")]
 
     if lookup is None:
-        res["indexer"] = [
-            error("LOOKUP_UNAVAILABLE", "symbol lookup is not configured")
-        ]
-        return res
+        return [error("LOOKUP_UNAVAILABLE", "symbol lookup is not configured")]
+
     
     if isinstance(lookup, SymbolLookup):
         # lookup object
@@ -252,10 +250,7 @@ async def handle_symbol_lookup(
         try:
             result = [lookup_obj.lookup(name)]
         except Exception:
-            res["indexer"] = [
-                error("SYMBOL_NOT_FOUND", "symbol doesn't exist of index. Use `grep`")
-            ]
-            return res
+            return [error("SYMBOL_NOT_FOUND", "symbol doesn't exist of index. Use `grep`")]
            
     elif isinstance(name, list):
         # list lookup
@@ -268,10 +263,7 @@ async def handle_symbol_lookup(
                 continue
         result = look_list
     else:
-        res["indexer"] = [
-            error("INVALID_LOOKUP_NAME", "name must be a string or list of strings")
-        ]
-        return res
+        return [error("INVALID_LOOKUP_NAME", "name must be a string or list of strings")]
     
     # cache would be warmed up in background not blocking clients request for lookup (Fire-and-forget cache warming)
     
