@@ -18,6 +18,7 @@ DEFAULT_CHAR_LIMIT = 12_000
 # Holds references to in-flight cache-warming tasks so they aren't GC'd
 # before they run. Tasks remove themselves on completion.
 _warm_tasks: set[asyncio.Task] = set()
+_warm_draining = False
 
 def error(code: str, message: str) -> dict[str, object]:
     return {"__xx_e_code": code, "message": message}
@@ -29,6 +30,33 @@ def _path_is_pending(indexer: CodeIndexer, path: str) -> bool:
         pending == path or canonical_path(pending) == target
         for pending in indexer.pending_paths
     )
+
+_warm_tasks: set[asyncio.Task] = set()
+_warm_draining = False
+
+
+async def drain_warm_tasks(timeout: float = 2.0) -> None:
+    """Give warm-cache tasks a grace period, then cancel the stragglers.
+
+    Must be awaited before the sqlite connection is closed, otherwise warm
+    tasks will race against conn.close().
+    """
+    global _warm_draining
+    _warm_draining = True
+    try:
+        snapshot = list(_warm_tasks)
+        if not snapshot:
+            return
+
+        done, pending = await asyncio.wait(snapshot, timeout=timeout)
+
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    finally:
+        _warm_tasks.clear()
+        _warm_draining = False
 
 
 async def wait_for_path_ready(
@@ -142,7 +170,7 @@ def serialize_symbol_code(
     return _truncate_text(code, char_limit=char_limit)
 
 
-def _lookup_response(results: list[LookupResult]) -> dict[str, list[dict[str, object]]]:
+def _lookup_response(results: list[LookupResult]) -> dict[str, list[dict[str, object]]] | list[dict[str, object]]:
     """Convert a list of lookup result into the MCP response-object contract."""
     res: dict[str, list[dict[str, object]]] = {}
     
@@ -180,13 +208,10 @@ def _lookup_response(results: list[LookupResult]) -> dict[str, list[dict[str, ob
                 })
             res[result.query] = match_res
         else:
-            err = error(
+            return [error(
                "SYMBOL_NOT_FOUND", 
                "symbol doesn't exist of index. Use `grep`"
-            )
-            if result.query is not None:
-                res[result.query] = [err]
-            continue
+            )]
     return res
 
 def _mtime_ns(path: str) -> int | None:
@@ -244,6 +269,8 @@ async def handle_symbol_lookup(
     if isinstance(lookup, SymbolLookup):
         # lookup object
         lookup_obj = lookup
+    else:
+        return [error("LOOKUP_UNAVAILABLE", "symbol lookup is not configured")]
     
     if isinstance(name, str):
         # single lookup
@@ -267,9 +294,10 @@ async def handle_symbol_lookup(
     
     # cache would be warmed up in background not blocking clients request for lookup (Fire-and-forget cache warming)
     
-    cache_task = asyncio.create_task(_warm_cache(indexer, result, lookup_obj))
-    _warm_tasks.add(cache_task)
-    cache_task.add_done_callback(_warm_tasks.discard)
+    if not _warm_draining:
+        cache_task = asyncio.create_task(_warm_cache(indexer, result, lookup_obj))
+        _warm_tasks.add(cache_task)
+        cache_task.add_done_callback(_warm_tasks.discard)
     
     return _lookup_response(result)
 

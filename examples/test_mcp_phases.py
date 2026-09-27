@@ -34,7 +34,7 @@ from capyidx.mcp.handlers import (
     serialize_symbol_code,
     wait_for_path_ready,
 )
-from capyidx.mcp.startup import MCP_TOOLS, mcp_handshake
+from capyidx.mcp.zz import MCP_TOOLS, mcp_handshake
 from capyidx.retrieval.models import SymbolCode
 from capyidx.retrieval.retrieval_pipeline import SymbolLookup
 from capyidx.api import _setup

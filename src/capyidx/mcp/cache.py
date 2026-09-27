@@ -26,7 +26,7 @@ class SymbolCache:
         if max_bytes < 0:
             raise ValueError("max_bytes must be non-negative")
         self.max_bytes = max_bytes
-        self._entries: OrderedDict[str, tuple[str, SymbolCode]] = OrderedDict()
+        self._entries: OrderedDict[str, tuple[str, SymbolCode, int]] = OrderedDict()
         self._by_path: dict[str, set[str]] = defaultdict(set)
         self._current_bytes = 0
 
@@ -42,21 +42,22 @@ class SymbolCache:
         return entry[1]
 
     def put(self, symbol_id: str, path: str, code: SymbolCode) -> None:
-        size = len(code.code.encode("utf-8"))
         previous = self._entries.pop(symbol_id, None)
         if previous is not None:
-            previous_path, previous_code = previous
+            previous_path, previous_code, previous_size = previous
             self._remove_from_path(previous_path, symbol_id)
-            self._current_bytes -= len(previous_code.code.encode("utf-8"))
+            self._current_bytes -= previous_size
 
         key = canonical_path(path)
-        self._entries[symbol_id] = (key, code)
+        size = len(code.code.encode("utf-8"))
+        
+        self._entries[symbol_id] = (key, code, size)
         self._by_path[key].add(symbol_id)
         self._current_bytes += size
 
         while self._current_bytes > self.max_bytes and self._entries:
-            oldest_id, (oldest_path, oldest_code) = self._entries.popitem(last=False)
-            self._current_bytes -= len(oldest_code.code.encode("utf-8"))
+            oldest_id, (oldest_path, oldest_code, oldest_size) = self._entries.popitem(last=False)
+            self._current_bytes -= oldest_size
             self._remove_from_path(oldest_path, oldest_id)
 
     def clear(self) -> None:

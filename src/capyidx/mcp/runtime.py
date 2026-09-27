@@ -11,6 +11,7 @@ from capyidx.chunker.chunk_codebase_index import ChunkCodebaseIndex
 from capyidx.db.db import open_index
 from capyidx.indexer.codebase_indexer import CodeIndexer
 from capyidx.retrieval.retrieval_pipeline import SymbolLookup
+from capyidx.mcp.handlers import drain_warm_tasks
 
 
 @dataclass
@@ -23,6 +24,11 @@ class Runtime:
     branch_tasks: list[asyncio.Task]
 
     async def shutdown(self) -> None:
+        # Drain warm-cache tasks first, they are the only ones that
+        # actively query the connection and would race with conn.close()
+        await drain_warm_tasks(timeout=2.0)
+        
+        # stop the long-lived watchers as they also hold conn
         for t in self.branch_tasks:
             t.cancel()
         if self.branch_tasks:

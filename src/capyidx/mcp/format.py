@@ -81,8 +81,6 @@ def format_lookup(result: dict[str, list[dict[str, object]]] | list[dict[str, ob
                 signature = m.get("signature")
                 if isinstance(signature, str):
                     sig = signature.strip().splitlines()
-                    lines.append(
-                        f"  signature={sig}"
-                    )
+                    lines.append("\n".join(sig))
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) if blocks else "(no matches)"

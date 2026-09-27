@@ -8,6 +8,12 @@ from capyidx.mcp.runtime import Runtime
 Executor = Callable[[Runtime, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
+# // tools/list returns:
+# {"tools": [{"name": "...", "description": "...", "inputSchema": {...}}, ...]}
+
+# // tools/call returns:
+# {"content": [{"type": "text", "text": "<string>"}], "isError": false}
+
 @dataclass(frozen=True)
 class Tool:
     name: str
@@ -43,7 +49,7 @@ async def _exec_lookup(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
 
 async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
     _path = None
-    cached_symbol = rt.indexer._cache.get(args["symbol_id"])
+    cached_symbol = rt.indexer.get_cached(args["symbol_id"])
     if cached_symbol is not None:
         _path = cached_symbol.path
     result = await handlers.handle_get_symbol(
@@ -61,7 +67,7 @@ async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
 
 async def _exec_range(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
     _path = None
-    cached_symbol = rt.indexer._cache.get(args["symbol_id"])
+    cached_symbol = rt.indexer.get_cached(args["symbol_id"])
     if cached_symbol is not None:
         _path = cached_symbol.path
     result = await handlers.handle_get_symbol_range(
