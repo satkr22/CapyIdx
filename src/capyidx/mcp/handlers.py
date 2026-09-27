@@ -324,7 +324,8 @@ async def handle_get_symbol(
 
     responses: list[dict[str, object]] = []
     for current_id in symbol_ids:
-        current_path = path
+        cached = indexer._cache.get(current_id)
+        current_path = cached.path if cached is not None else None
         if current_path is not None and not await wait_for_path_ready(indexer, current_path):
             responses.append(
                 error(
@@ -335,12 +336,13 @@ async def handle_get_symbol(
             continue
 
         code = await _load_symbol(indexer, current_id, lookup)
+        
         if isinstance(code, dict):
             responses.append(code)
             continue
 
-        # A list may contain symbols from different files. When no path was
-        # supplied, wait for each symbol's own path after loading it.
+        # A cache miss may reconstruct a symbol from a file that is currently
+        # being refreshed, so check its path after reconstruction.
         if current_path is None and not await wait_for_path_ready(indexer, code.path):
             responses.append(
                 error(
@@ -349,8 +351,14 @@ async def handle_get_symbol(
                 )
             )
             continue
+        
+        if cached is None:
+            indexer._cache.put(code.id, code.path, code)
+        
         responses.append(serialize_symbol_code(code, char_limit=char_limit))
-
+        
+    
+    
     return responses[0] if single else responses
 
 
@@ -379,13 +387,9 @@ async def handle_get_symbol_range(
 
     responses: list[dict[str, object]] = []
     for current_id in symbol_ids:
-        code = await _load_symbol(indexer, current_id, lookup)
-        if isinstance(code, dict):
-            responses.append(code)
-            continue
-
-        target_path = path or code.path
-        if not await wait_for_path_ready(indexer, target_path):
+        cached = indexer._cache.get(current_id)
+        current_path = cached.path if cached is not None else None
+        if current_path is not None and not await wait_for_path_ready(indexer, current_path):
             responses.append(
                 error(
                     "PATH_PENDING",
@@ -394,6 +398,23 @@ async def handle_get_symbol_range(
             )
             continue
 
+        code = await _load_symbol(indexer, current_id, lookup)
+        if isinstance(code, dict):
+            responses.append(code)
+            continue
+
+        if current_path is None and not await wait_for_path_ready(indexer, code.path):
+            responses.append(
+                error(
+                    "PATH_PENDING",
+                    "still reindexing this file, try again shortly or use grep",
+                )
+            )
+            continue
+        
+        if cached is None:
+            indexer._cache.put(code.id, code.path, code)
+        
         actual_start = max(start_line, code.start_line)
         actual_end = min(end_line, code.end_line)
         if actual_start > actual_end:

@@ -48,13 +48,11 @@ async def _exec_lookup(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
     return _text(fmt.format_lookup(result))
 
 async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
-    _path = rt.indexer.get_cached_path(args["symbol_id"])
     result = await handlers.handle_get_symbol(
         rt.indexer,
         args["symbol_id"],
         rt.lookup,
-        path=_path,
-        char_limit=args.get("char_limit", handlers.DEFAULT_CHAR_LIMIT),
+        char_limit=handlers.DEFAULT_CHAR_LIMIT,
     )
     items = result if isinstance(result, list) else [result]
     text = fmt.format_symbols(items)
@@ -63,15 +61,13 @@ async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _exec_range(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
-    _path =  rt.indexer.get_cached_path(args["symbol_id"])
     result = await handlers.handle_get_symbol_range(
         rt.indexer,
         args["symbol_id"],
         args["start_line"],
         args["end_line"],
         rt.lookup,
-        path=_path,
-        char_limit=args.get("char_limit", handlers.DEFAULT_CHAR_LIMIT),
+        char_limit=handlers.DEFAULT_CHAR_LIMIT,
     )
     items = result if isinstance(result, list) else [result]
     text = fmt.format_symbols(items)
