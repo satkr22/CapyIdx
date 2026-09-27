@@ -271,9 +271,9 @@ class ChunkCodebaseIndex(CodebaseIndexer):
                     """
                     INSERT OR REPLACE INTO symbols(
                         id, type, name, parentId, startLine, endLine,
-                        cacheKey, path
+                        signature, cacheKey, path
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(sym.id),
@@ -282,6 +282,7 @@ class ChunkCodebaseIndex(CodebaseIndexer):
                         str(sym.parent_id) if sym.parent_id else None,
                         sym.start_line,
                         sym.end_line,
+                        sym.signature,
                         cache_key,
                         filepath,
                     ),
@@ -295,8 +296,8 @@ class ChunkCodebaseIndex(CodebaseIndexer):
             ]
             if orphans:
                 # log for orphan symbols(symbols withut chunk)
-                print(f"symbols without chunks: "
-                    f"{[(str(s.id), s.name, s.type, s.filepath) for s in orphans]}")
+                # print(f"symbols without chunks: "
+                #     f"{[(str(s.id), s.name, s.type, s.filepath) for s in orphans]}")
                 
                 raise RuntimeError(
                     f"symbols without chunks: "

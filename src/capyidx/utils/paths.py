@@ -51,13 +51,14 @@ async def migrate(
 
     if not migration_path.exists():
         try:
-            print(f"Running migration: {id}")
+            # print(f"Running migration: {id}")
             migration_path.write_text("") 
             result = callback()
             if result is not None and hasattr(result, "__await__"):
                 await result
         except Exception as e:
-            print(f"Migration {id} failed: {e}")
+            # print(f"Migration {id} failed: {e}")
+            pass
     elif on_already_complete is not None:
         on_already_complete()
 

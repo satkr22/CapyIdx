@@ -22,8 +22,15 @@ class Runtime:
     roots: list[str]
     watch_task: asyncio.Task
     branch_tasks: list[asyncio.Task]
+    initial_index_task: asyncio.Task
 
     async def shutdown(self) -> None:
+        # The initial index shares the SQLite connection with every request.
+        # It must finish/cancel before the connection is closed.
+        if not self.initial_index_task.done():
+            self.initial_index_task.cancel()
+        await asyncio.gather(self.initial_index_task, return_exceptions=True)
+
         # Drain warm-cache tasks first, they are the only ones that
         # actively query the connection and would race with conn.close()
         await drain_warm_tasks(timeout=2.0)
@@ -96,6 +103,14 @@ async def build_runtime(
         if indexer.current_indexing_state.status == "done":
             indexer.set_system_ready(True)
 
-    asyncio.create_task(initial_index())
+    initial_index_task = asyncio.create_task(initial_index())
 
-    return Runtime(indexer, lookup, conn, roots, watch_task, branch_tasks)
+    return Runtime(
+        indexer,
+        lookup,
+        conn,
+        roots,
+        watch_task,
+        branch_tasks,
+        initial_index_task,
+    )

@@ -27,7 +27,11 @@ dependencies = [
     "tree-sitter>=0.22",
     "tree-sitter-language-pack>=0.7",
     "watchdog>=4.0",
+    "mcp>=1.27,<2",
 ]
+
+[project.scripts]
+capyidx-mcp = "capyidx.mcp.server:main"
 
 [project.optional-dependencies]
 test = [

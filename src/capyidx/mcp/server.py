@@ -10,11 +10,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator, Awaitable, Callable
 
-from mcp.server import Server, ServerRequestContext, stdio
-from mcp.server.lowlevel import NotificationOptions
-from mcp.server.models import InitializationOptions
+
+from mcp.server.lowlevel import NotificationOptions, Server
+from mcp.server.stdio import stdio_server
 from mcp.types import (
-    CallToolRequestParams,
     CallToolResult,
     ListToolsResult,
     Tool,
@@ -22,7 +21,6 @@ from mcp.types import (
 
 from capyidx.mcp.runtime import Runtime, build_runtime
 from capyidx.mcp.tools import TOOLS, TOOLS_BY_NAME
-
 
 _SOURCE_ROOT = str(Path(__file__).resolve().parents[2])
 if _SOURCE_ROOT not in sys.path:
@@ -59,34 +57,6 @@ async def _execute_tool(
             "content": [{"type": "text", "text": f"Internal error: {exc}"}],
             "isError": True,
         }
-
-
-def _initial_index_tasks() -> list[asyncio.Task[Any]]:
-    """Find the startup tasks runtime.py cannot retain itself."""
-    tasks: list[asyncio.Task[Any]] = []
-    for task in asyncio.all_tasks():
-        if task.done():
-            continue
-        try:
-            qualname = task.get_coro().__qualname__ # type: ignore
-        except AttributeError:
-            continue
-        if qualname.endswith("build_runtime.<locals>.initial_index"):
-            tasks.append(task)
-    return tasks
-
-
-async def _shutdown_runtime(
-    runtime: Runtime,
-    startup_tasks: list[asyncio.Task[Any]],
-) -> None:
-    """Cancel initial indexing before runtime.shutdown closes SQLite."""
-    for task in startup_tasks:
-        if not task.done():
-            task.cancel()
-    if startup_tasks:
-        await asyncio.gather(*startup_tasks, return_exceptions=True)
-    await runtime.shutdown()
 
 
 class _NotificationState:
@@ -147,68 +117,66 @@ async def _run_sdk() -> None:
         runtime = await build_runtime(
             _repository_path(), emit_message=_make_runtime_callback(state)
         )
-        startup_tasks = _initial_index_tasks()
         try:
             yield {"runtime": runtime}
         finally:
-            await _shutdown_runtime(runtime, startup_tasks)
+            await runtime.shutdown()
 
-    async def handle_list_tools(
-        ctx: ServerRequestContext,
-        params: Any,
-    ) -> ListToolsResult:
-        del params
-        state.session = ctx.session
+    server = Server(
+        SERVER_NAME,
+        version=SERVER_VERSION,
+        lifespan=lifespan,
+    )
+
+    @server.list_tools()  # type: ignore[attr-defined]
+    async def handle_list_tools() -> ListToolsResult:
+        context = server.request_context # type: ignore
+        state.session = context.session
         state.initialized = True
         return ListToolsResult(
             tools=[
                 Tool(
                     name=tool.name,
                     description=tool.description,
-                    input_schema=tool.input_schema,
+                    inputSchema=tool.input_schema,
                 )
                 for tool in TOOLS
             ]
         )
 
+    @server.call_tool(validate_input=True) # type: ignore[attr-defined]
     async def handle_call_tool(
-        ctx: ServerRequestContext,
-        params: CallToolRequestParams,
+        name: str,
+        arguments: dict[str, Any],
     ) -> CallToolResult:
-        state.session = ctx.session
+        context = server.request_context # type: ignore
+        state.session = context.session
         state.initialized = True
         result = await _execute_tool(
-            ctx.lifespan_context["runtime"],
-            params.name,
-            params.arguments or {},
+            context.lifespan_context["runtime"],
+            name,
+            arguments,
         )
         return CallToolResult(**result)
 
-    server = Server(
-        SERVER_NAME,
-        version=SERVER_VERSION,
-        lifespan=lifespan,
-        on_list_tools=handle_list_tools,
-        on_call_tool=handle_call_tool,
-    )
-
-    async with stdio.stdio_server() as (read, write):
+    async with stdio_server() as (read, write):
         await server.run(
             read,
             write,
-            InitializationOptions(
-                server_name=SERVER_NAME,
-                server_version=SERVER_VERSION,
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
+            server.create_initialization_options(
+                notification_options=NotificationOptions(),
             ),
         )
+
 
 async def run_stdio() -> None:
     await _run_sdk()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point for the CapyIdx MCP stdio server."""
     asyncio.run(run_stdio())
+
+
+if __name__ == "__main__":
+    main()

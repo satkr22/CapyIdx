@@ -576,7 +576,7 @@ class CodeSnippetsCodebaseIndex(CodebaseIndexer):
                 for row in rows
             ]
         except Exception as e:  # noqa: BLE001
-            print(f"Error getting all code snippets: {e}")
+            # print(f"Error getting all code snippets: {e}")
             return []
 
     @staticmethod

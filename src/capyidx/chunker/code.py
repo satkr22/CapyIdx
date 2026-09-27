@@ -154,7 +154,7 @@ def get_method_nodes(class_node: Node) -> list[Node]:
 async def _char_split(blob: bytes, max_chunk_size: int) -> list[bytes]:
     
     # add logger for char spit
-    print("Charater splitting triggered because any single symbol is excedding the max token bugdet.")
+    # print("Charater splitting triggered because any single symbol is excedding the max token bugdet.")
     
     logging.getLogger(__name__).warning(
         "char-split: %d bytes, first 200 chars: %r",

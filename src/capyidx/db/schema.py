@@ -1,7 +1,7 @@
 from __future__ import annotations
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS symbols(
     parentId   TEXT,
     startLine  INTEGER NOT NULL,
     endLine    INTEGER NOT NULL,
+    signature  TEXT,
     cacheKey   TEXT NOT NULL,
     path       TEXT NOT NULL,
     FOREIGN KEY(parentId) REFERENCES symbols(id) ON DELETE CASCADE
@@ -105,8 +106,17 @@ CREATE INDEX IF NOT EXISTS idx_chunk_tags_chunkid ON chunk_tags(chunkId);
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_DDL)
+
+    # Older indexes were created before symbol signatures were stored on the
+    # symbol row. Keep those databases usable without requiring a rebuild.
+    symbol_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(symbols)")
+    }
+    if "signature" not in symbol_columns:
+        conn.execute("ALTER TABLE symbols ADD COLUMN signature TEXT")
+
     conn.execute(
-        "INSERT OR IGNORE INTO schema_version(version) VALUES (?)",
+        "INSERT OR REPLACE INTO schema_version(version) VALUES (?)",
         (SCHEMA_VERSION,),
     )
     conn.commit()

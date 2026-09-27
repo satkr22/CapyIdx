@@ -647,7 +647,7 @@ class SymbolLookup:
             path=str(row["path"]),
             start_line=int(row["startLine"]),
             end_line=int(row["endLine"]),
-            signature=str(row["signature"]),
+            signature=str(row["signature"] or ""),
             match_kind=match_kind,  # type: ignore[arg-type]
         )
 

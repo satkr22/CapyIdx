@@ -173,7 +173,7 @@ async def get_parser_for_file(filepath: str) -> Optional[Parser]:
         parser.language = language
         return parser
     except Exception as e: 
-        print(f"Unable to load language for file {filepath} {e}")
+        # print(f"Unable to load language for file {filepath} {e}")
         return None
 
 
@@ -199,7 +199,7 @@ async def get_language_for_file(filepath: str) -> Optional[Language]:
             name_to_language[language_name] = language
         return language
     except Exception as e:  # noqa: BLE001
-        print(f"Unable to load language for file {filepath} {e}")
+        # print(f"Unable to load language for file {filepath} {e}")
         return None
 
 
@@ -260,7 +260,7 @@ async def get_symbols_for_file(
         # tree_sitter requires bytes input.
         tree = parser.parse(contents.encode("utf-8"))
     except Exception:  # noqa: BLE001
-        print(f"Error parsing file: {filepath}")
+        # print(f"Error parsing file: {filepath}")
         return None
 
     symbols: List[SymbolWithRange] = []
@@ -317,7 +317,8 @@ async def get_symbols_for_many_files(
         try:
             symbols = await get_symbols_for_file(uri, contents)
         except Exception as e:  # noqa: BLE001
-            print(f"Failed to get symbols for {uri}: {e}")
+            # print(f"Failed to get symbols for {uri}: {e}")
+            pass
         return (uri, symbols or [])
 
     results = await asyncio.gather(*(process(uri) for uri in uris))
