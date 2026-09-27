@@ -218,8 +218,12 @@ class CodeIndexer:
     def current_indexing_state(self) -> IndexingProgressUpdate:
         return self._state
     
-    def get_cached(self, symbol_id: str):
-        return self._cache.get(symbol_id)
+    def get_cached_path(self, symbol_id: str) -> str | None:
+        sym = self._cache.get(symbol_id)
+        if sym is not None:
+            path = sym.path
+            return path
+        return None
 
     def get_index_status(self) -> dict[str, object]:
         """Return a read-only diagnostic snapshot for internal host use.

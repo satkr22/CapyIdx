@@ -48,10 +48,7 @@ async def _exec_lookup(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
     return _text(fmt.format_lookup(result))
 
 async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
-    _path = None
-    cached_symbol = rt.indexer.get_cached(args["symbol_id"])
-    if cached_symbol is not None:
-        _path = cached_symbol.path
+    _path = rt.indexer.get_cached_path(args["symbol_id"])
     result = await handlers.handle_get_symbol(
         rt.indexer,
         args["symbol_id"],
@@ -66,10 +63,7 @@ async def _exec_get(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _exec_range(rt: Runtime, args: dict[str, Any]) -> dict[str, Any]:
-    _path = None
-    cached_symbol = rt.indexer.get_cached(args["symbol_id"])
-    if cached_symbol is not None:
-        _path = cached_symbol.path
+    _path =  rt.indexer.get_cached_path(args["symbol_id"])
     result = await handlers.handle_get_symbol_range(
         rt.indexer,
         args["symbol_id"],
