@@ -70,8 +70,9 @@ class _WatchdogHandler(_WatchdogEventHandler):
                 self.ignore.add(git_ig_array_from_file_path(local_path))
             # TODO: a repo where .gitignore gets edited won't pick up new ignore rules until restart.
             
-    def _push(self, path: str):
-        if os.path.isdir(path):
+    def _push(self, path: str, *, is_directory: bool = False):
+        # Deleted directories no longer satisfy os.path.isdir().
+        if is_directory or os.path.isdir(path):
             return
 
         if self.ignore.ignores(path):
@@ -83,17 +84,17 @@ class _WatchdogHandler(_WatchdogEventHandler):
         )
 
     def on_created(self, event):
-        self._push(event.src_path)
+        self._push(event.src_path, is_directory=event.is_directory)
 
     def on_modified(self, event):
-        self._push(event.src_path)
+        self._push(event.src_path, is_directory=event.is_directory)
 
     def on_deleted(self, event):
-        self._push(event.src_path)
+        self._push(event.src_path, is_directory=event.is_directory)
 
     def on_moved(self, event):
-        self._push(event.src_path)
-        self._push(event.dest_path)
+        self._push(event.src_path, is_directory=event.is_directory)
+        self._push(event.dest_path, is_directory=event.is_directory)
 
 
 class WatchdogFileWatcher:

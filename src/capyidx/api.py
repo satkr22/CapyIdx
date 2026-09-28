@@ -130,7 +130,7 @@ async def index_repo(
     """
     async for _ in index_repo_iter(repo, max_chunk_size=max_chunk_size):
         pass
-    print("Indexing Completed.")
+    # print("Indexing Completed.")
 
 
 async def index_repo_iter(
@@ -178,7 +178,7 @@ async def index_repo_iter(
 
         async for update in indexer.refresh_codebase_index(roots, conn):
             yield update
-        print("Indexing Completed.")
+        # print("Indexing Completed.")
 
         if watch:
             async for update in indexer.start_watch(

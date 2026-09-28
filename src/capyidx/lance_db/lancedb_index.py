@@ -53,7 +53,7 @@ class LanceDbIndex(CodebaseIndexer):
             LanceDbIndex.lance = importlib.import_module("lancedb")
             return LanceDbIndex(db, embeddings_provider, filesystem)
         except Exception as e:
-            print("Failed to import lancedb. If you're on a pre-Haswell x86_64 CPU,\ninstall the compatibility wheel: pip uninstall lancedb && pip install lancedb-compat':", e)
+            # print("Failed to import lancedb. If you're on a pre-Haswell x86_64 CPU,\ninstall the compatibility wheel: pip uninstall lancedb && pip install lancedb-compat':", e)
             return None
 
     def __init__(
@@ -155,7 +155,8 @@ class LanceDbIndex(CodebaseIndexer):
                     continue
                 chunk_map[item.path] = ItemWithChunks(item=item, chunks=chunks)
             except Exception as e:
-                print(f"LanceDBIndex, skipping {item.path}: {e}")
+                # print(f"LanceDBIndex, skipping {item.path}: {e}")
+                pass
         return chunk_map
 
     async def get_chunks(self, item: PathAndCacheKey, content: str) -> List[Chunk]:
@@ -304,10 +305,11 @@ class LanceDbIndex(CodebaseIndexer):
                         }
                     )
                 except Exception as e:
-                    print(
-                        f"LanceDBIndex, skipping {cached_item['path']} due to invalid vector JSON:\n"
-                        f"{cached_item['vector']}\n\nError: {e}"
-                    )
+                    # print(
+                    #     f"LanceDBIndex, skipping {cached_item['path']} due to invalid vector JSON:\n"
+                    #     f"{cached_item['vector']}\n\nError: {e}"
+                    # )
+                    pass
 
             if lance_rows:
                 if need_to_create_lance_table:
@@ -400,7 +402,7 @@ class LanceDbIndex(CodebaseIndexer):
         table_name = self.table_name_for_tag(tag)
         table_names = await asyncio.to_thread(db.table_names)
         if table_name not in table_names:
-            print(f"Table not found in LanceDB {table_name}")
+            # print(f"Table not found in LanceDB {table_name}")
             return []
 
         table = await asyncio.to_thread(db.open_table, table_name)

@@ -95,7 +95,7 @@ class SymbolLookup:
         scope_sql, scope_params = self._symbol_scope_sql(scope)
         exact_rows = self.db.execute(
             f"""
-            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine
+            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine, s.signature
             FROM symbols s
             WHERE s.name = ? AND ({scope_sql})
             ORDER BY s.path, s.startLine, s.endLine, s.type, s.name, s.id
@@ -108,7 +108,7 @@ class SymbolLookup:
         
         case_insensitive_rows = self.db.execute(
             f"""
-            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine
+            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine, s.signature
             FROM symbols s
             WHERE s.name = ? COLLATE NOCASE AND ({scope_sql})
             ORDER BY s.path, s.startLine, s.endLine, s.type, s.name, s.id
@@ -116,12 +116,12 @@ class SymbolLookup:
             [name, *scope_params],
         ).fetchall()
         if case_insensitive_rows:
-            matches = [self._match_from_row(row, "exact") for row in case_insensitive_rows]
+            matches = [self._match_from_row(row, "exact_case_insensitive") for row in case_insensitive_rows]
             return self._deduplicate_matches(matches, scope)
 
         substring_rows = self.db.execute(
             f"""
-            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine
+            SELECT s.id, s.name, s.type, s.path, s.startLine, s.endLine, s.signature
             FROM symbols s
             WHERE instr(lower(s.name), lower(?)) > 0
               AND ({scope_sql})
@@ -647,6 +647,7 @@ class SymbolLookup:
             path=str(row["path"]),
             start_line=int(row["startLine"]),
             end_line=int(row["endLine"]),
+            signature=str(row["signature"] or ""),
             match_kind=match_kind,  # type: ignore[arg-type]
         )
 

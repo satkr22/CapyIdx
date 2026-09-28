@@ -7,6 +7,8 @@ that need repository-aware code context. It has incremental re-indexing feature
 that re-indexes only modified  or deleted (deteles indexes of deleted file) files.
 It looks for files which are modified and after a set interval(default=5 sec) it re-indexes them.
 
+Capyidx comes with in-built mcp server for codex.
+
 ## Installation
 
 ```bash
@@ -65,6 +67,40 @@ async for update in index_repo_iter("/path/to/git/repository"):
 
 Pass `watch=True` to continue indexing changed files after the initial pass.
 The watcher uses `watchdog`(recommended) when installed and otherwise falls back to polling.
+
+## Codex CLI MCP integration
+
+CapyIdx includes an MCP server for Codex CLI. Install it from PyPI:
+
+```bash
+pip install capyidx
+```
+
+From the repository you want Codex to inspect, register CapyIdx once:
+
+```bash
+cd /path/to/your/repository
+codex mcp add capyidx \
+  --env CAPYIDX_REPO="$PWD" \
+  -- capyidx-mcp
+```
+
+Not adding any repository path to environment variable would make capyidx use the current working directory of codex.
+
+Start Codex in that repository:
+
+```bash
+codex
+```
+
+Then ask(example):
+
+```text
+Use the CapyIdx MCP server. Call lookup_symbol for "any function/class", then call get_symbol on the returned symbol_id.
+```
+
+CapyIdx indexes the repository automatically and provides symbol lookup,
+source reconstruction, and line-range retrieval through MCP.
 
 ## Query workflows
 

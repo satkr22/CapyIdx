@@ -21,6 +21,8 @@ class Symbol:
     start_line: int = 0
     end_line: int = 0
     
+    signature: Optional[str] = None
+    
     filepath: Optional[str] = None
     cache_key: Optional[str] = None
 
