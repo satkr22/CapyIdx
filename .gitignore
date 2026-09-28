@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+.git
 .Python
 build/
 develop-eggs/
@@ -232,3 +233,4 @@ dist
 .pytest_cache
 *.txt
 zz.py
+try*.py
