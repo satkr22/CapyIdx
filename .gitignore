@@ -231,3 +231,5 @@ dist
 .python-version
 .pytest_cache
 *.txt
+try*.py
+zz.py
