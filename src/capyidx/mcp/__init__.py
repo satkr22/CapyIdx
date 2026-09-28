@@ -1,8 +1,4 @@
 """MCP integration for CapyIdx.
-
-The MCP package must stay light at import time. Core CapyIdx modules import
-``capyidx.mcp.cache`` for the symbol cache, so importing runtime/tool objects
-eagerly here would create a cycle through :mod:`capyidx.api`.
 """
 
 from __future__ import annotations
