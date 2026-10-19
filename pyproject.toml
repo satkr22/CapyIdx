@@ -37,12 +37,6 @@ capyidx-mcp = "capyidx.mcp.server:main"
 test = [
     "pytest>=8.0",
 ]
-openai = [
-    "openai>=1.0",
-]
-ollama = [
-    "ollama>=0.3",
-]
 local-embeddings = [
     "sentence-transformers>=3.0",
 ]

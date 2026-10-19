@@ -32,8 +32,6 @@ The core package uses Tree-sitter for source parsing and `tiktoken` for chunk
 size calculations. Optional integrations can be installed with extras:
 
 ```bash
-python -m pip install "capyidx[openai]"
-python -m pip install "capyidx[ollama]"
 python -m pip install "capyidx[local-embeddings]"
 python -m pip install "capyidx[vector]"
 ```
