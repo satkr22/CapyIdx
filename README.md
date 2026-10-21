@@ -36,6 +36,29 @@ python -m pip install "capyidx[local-embeddings]"
 python -m pip install "capyidx[vector]"
 ```
 
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Index["Indexing (incremental)"]
+        R[(Repository)] --> W[Walker + hash diff]
+        W --> T[Tree-sitter chunker]
+        T --> DB[(SQLite)]
+        R -. file changes .-> WA[Watcher] -.-> W
+    end
+    subgraph Query["Retrieval (deterministic)"]
+        A[Coding agent via MCP / Python API] --> L[lookup_symbol]
+        L --> DB
+        DB --> G["get_symbol / get_symbol_range"]
+        G --> A
+    end
+```
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the component model,
+indexing and retrieval flows, storage schema, MCP lifecycle, and operational
+notes. Mermaid-only versions of the diagrams are in
+[`docs/DIAGRAMS.md`](docs/DIAGRAMS.md).
+
+
 ## Basic usage
 
 Indexing is asynchronous. The convenience API waits for the initial pass to
@@ -144,7 +167,7 @@ deterministic symbol retrieval. FTS, code-snippet, embedding, and LanceDB
 backends are present as lower-level components but are not automatically wired
 into `index_repo` yet.
 
-Indexes are stored under `~/.capyidx/.codebase_index` by default. Set
+Indexes are stored under `~/.capyIdx/.codebase_index` by default. Set
 `CAPYIDX_HOME` to use a different data directory.
 
 ## Development checks

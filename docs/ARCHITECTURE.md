@@ -112,7 +112,7 @@ symbol cache, refreshes the complete workspace, then restarts watching.
 ## Storage model
 
 The default database location is derived from `CAPYIDX_HOME` or the user's home
-directory, under `.capyIdx/.codebase_index` in the current implementation. The
+directory, under `~/.capyIdx/.codebase_index` in the current implementation. The
 database filename is a SHA-256-derived value for the `(directory, branch)` pair.
 
 ```mermaid
