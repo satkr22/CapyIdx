@@ -155,3 +155,10 @@ pytest
 python -m build
 ```
 The repository's CI runs these checks on Python 3.10, 3.11, and 3.12.
+
+## Architecture documentation
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the component model,
+indexing and retrieval flows, storage schema, MCP lifecycle, and operational
+notes. Mermaid-only versions of the diagrams are in
+[`docs/DIAGRAMS.md`](docs/DIAGRAMS.md).
