@@ -16,6 +16,20 @@ standalone repository indexing and symbol lookup system.
 
 Capyidx comes with in-built mcp server for codex.
 
+## Demo
+
+### CapyIdx MCP server Coding Agents Integration
+
+Below is a demonstration of the CapyIdx MCP sever in action when integrated with codex-cli and qwen-code.
+
+<h3>1. Codex Integration</h3>
+
+https://github.com/user-attachments/assets/58505e99-42ee-45c6-b039-ead78490e7d8
+
+<h3>2. Qwen Code Integration</h3>
+
+https://github.com/user-attachments/assets/5b4b3ab3-d9ea-449a-b962-ac9a35e9d26a
+
 ## Installation
 
 ```bash
