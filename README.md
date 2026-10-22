@@ -104,13 +104,20 @@ CapyIdx includes an MCP server for Codex CLI. Install it from PyPI:
 pip install capyidx
 ```
 
-From the repository you want Codex to inspect, register CapyIdx once:
+From the repository you want Codex-cli and Qwen-cli to inspect, register CapyIdx once:
 
 ```bash
 cd /path/to/your/repository
+
+# codex
 codex mcp add capyidx \
   --env CAPYIDX_REPO="$PWD" \
   -- capyidx-mcp
+
+# qwen
+qwen mcp add capyidx \
+  -e CAPYIDX_REPO="$PWD" \
+  capyidx-mcp
 ```
 
 Not adding any repository path to environment variable would make capyidx use the current working directory of codex.
