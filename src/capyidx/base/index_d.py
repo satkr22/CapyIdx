@@ -43,6 +43,7 @@ class Chonk:
     next_chunk: Optional[UUID | None] = None
 
     signature: Optional[str] = None
+    token_count: Optional[int] = None
 
 @dataclass
 class Chunk(Chonk):

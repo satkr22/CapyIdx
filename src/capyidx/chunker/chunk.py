@@ -72,7 +72,8 @@ async def chunk_document_without_id(
     idx = 0
     async for chunk_dict in basic_chunker(contents, max_chunk_size):
         content = chunk_dict["content"]
-        if await count_tokens_async(content) > max_chunk_size:
+        tokens = await count_tokens_async(content)
+        if tokens > max_chunk_size:
             continue
 
         ch = Chonk(
@@ -86,6 +87,7 @@ async def chunk_document_without_id(
             start_line=chunk_dict["startLine"],
             end_line=chunk_dict["endLine"],
             signature=content.split("\n", 1)[0].strip(),
+            token_count=tokens,
         )
         file_symbol.chunk_ids.append(ch.id) # type: ignore
         result.chunks.append(ch)
@@ -109,7 +111,10 @@ async def chunk_document(
         chunk_without_id: Chonk,
     ) -> Optional[Chunk]:
 
-        if await count_tokens_async(chunk_without_id.content) > max_chunk_size:
+        if chunk_without_id.token_count is None:
+            chunk_without_id.token_count = await count_tokens_async(chunk_without_id.content)
+        
+        if chunk_without_id.token_count > max_chunk_size:
             return None
         
         current_index = index_box[0]

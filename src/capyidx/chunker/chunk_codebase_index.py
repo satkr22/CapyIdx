@@ -22,7 +22,11 @@ from capyidx.base.index_types import (
     PathAndCacheKey,
     RefreshIndexResults,
 )
-from capyidx.chunker.chunk import chunk_document, ChunkDocumentParam, should_chunk
+# from capyidx.chunker.chunk import chunk_document, ChunkDocumentParam, should_chunk
+
+from capyidx.chunker.exp_chunk import chunk_document, ChunkDocumentParam, should_chunk
+
+
 from capyidx.utils.chunk_utils import tag_to_string
 from capyidx.utils.uri1 import get_uri_path_basename
 
