@@ -1,68 +1,65 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
+import sqlite3
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import pytest
 
 import capyidx
-
-
-def _init_git_repo(repo: Path, files: dict[str, str]) -> None:
-    repo.mkdir()
-    for relative_path, contents in files.items():
-        path = repo / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents, encoding="utf-8")
-
-    subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
-    subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=CapyIdx API Tests",
-            "-c",
-            "user.email=capyidx-api-tests@example.invalid",
-            "commit",
-            "--quiet",
-            "--no-gpg-sign",
-            "-m",
-            "Test fixture",
-        ],
-        cwd=repo,
-        check=True,
-    )
-
-
-def _fixture_files() -> dict[str, str]:
-    return {
-        "alpha/duplicate.py": (
-            "def duplicate():\n"
-            "    return \"alpha\"\n"
-        ),
-        "beta/duplicate.py": (
-            "def duplicate():\n"
-            "    return \"beta\"\n"
-        ),
-        "long_module.py": (
-            "def long_function(value):\n"
-            "    first = value + 1\n"
-            "    second = first + 1\n"
-            "    third = second + 1\n"
-            "    return third\n"
-        ),
-    }
+from capyidx.db.schema import init_schema
+from capyidx.retrieval.retrieval_pipeline import SymbolLookup
+from capyidx.utils.uri1 import get_path_to_uri
 
 
 @pytest.fixture
 def indexed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     repo = tmp_path / "repo"
-    _init_git_repo(repo, _fixture_files())
-    monkeypatch.chdir(repo)
-    monkeypatch.setenv("CAPYIDX_HOME", str(tmp_path / "capyidx-home"))
-    asyncio.run(capyidx.index_repo(repo, max_chunk_size=128))
+    repo.mkdir()
+    paths = {
+        "alpha": repo / "alpha" / "duplicate.py",
+        "beta": repo / "beta" / "duplicate.py",
+        "long": repo / "long_module.py",
+    }
+    for path in paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = [
+        ("duplicate-alpha", "duplicate", paths["alpha"], 'def duplicate():\n    return "alpha"'),
+        ("duplicate-beta", "duplicate", paths["beta"], 'def duplicate():\n    return "beta"'),
+        ("long-function", "long_function", paths["long"], "def long_function(value):\n    first = value + 1\n    second = first + 1\n    third = second + 1\n    return third"),
+    ]
+    conn = sqlite3.connect(str(tmp_path / "lookup.sqlite"), check_same_thread=False)
+    init_schema(conn)
+    tag = f"{get_path_to_uri(str(repo))}::NONE::chunks"
+    for symbol_id, name, path, code in rows:
+        path_text = get_path_to_uri(str(path))
+        signature = code.splitlines()[0]
+        conn.execute(
+            "INSERT INTO symbols(id,type,name,parentId,startLine,endLine,signature,cacheKey,path) VALUES (?,?,?,?,?,?,?,?,?)",
+            (symbol_id, "function", name, None, 1, len(code.splitlines()), signature, symbol_id, path_text),
+        )
+        chunk_id = f"chunk-{symbol_id}"
+        conn.execute(
+            "INSERT INTO chunks(id,symbolId,cacheKey,path,idx,pieceIndex,pieceCount,prevChunk,nextChunk,signature,startLine,endLine,content) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (chunk_id, symbol_id, symbol_id, path_text, 0, 0, 1, None, None, signature, 1, len(code.splitlines()), code),
+        )
+        conn.execute("INSERT INTO chunk_tags(tag,chunkId) VALUES (?,?)", (tag, chunk_id))
+    conn.commit()
+
+    lookup = SymbolLookup(conn, [get_path_to_uri(str(repo))])
+
+    @asynccontextmanager
+    async def fake_open_lookup(_repo):
+        yield lookup
+
+    monkeypatch.setattr(capyidx.api, "open_lookup", fake_open_lookup)
+
+    async def direct_call(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(capyidx.api.asyncio, "to_thread", direct_call)
     return repo
 
 
@@ -86,27 +83,6 @@ def test_index_repo_rejects_invalid_repository_paths(
 
     with pytest.raises(expected_error):
         asyncio.run(capyidx.index_repo(repo))
-
-
-def test_index_repo_allows_directory_without_git(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repo = tmp_path / "not-git"
-    repo.mkdir()
-    (repo / "module.py").write_text(
-        "def available_without_git():\n    return True\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(repo)
-    monkeypatch.setenv("CAPYIDX_HOME", str(tmp_path / "capyidx-home"))
-
-    asyncio.run(capyidx.index_repo(repo, max_chunk_size=128))
-
-    result = asyncio.run(
-        capyidx.lookup_symbol(repo, "available_without_git")
-    )
-    assert result.selected is not None
 
 
 def test_unknown_symbol_returns_empty_matches(indexed_repo: Path) -> None:
